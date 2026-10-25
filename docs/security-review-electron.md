@@ -1,6 +1,6 @@
 # بازبینی امنیتی Electron — Pro.Max Cabinet Studio v0.1.0
 
-تاریخ بازبینی: ۲۰۲۶-۱۰-۲۵ · دامنه: `electron/main.cjs`، `index.html`، `src/**`، `vite.config.js`، `package.json` (بخش build)
+تاریخ بازبینی: ۲۰۲۶-۱۰-۲۶ · دامنه: `electron/main.cjs`، `index.html`، `src/**`، `vite.config.js`، `package.json` (بخش build)
 
 ## خلاصه‌ی مدیریتی
 
@@ -61,7 +61,7 @@ contents.setWindowOpenHandler(({ url }) => {
 });
 
 contents.on('will-navigate', (event, url) => {
-  if (isDev && url.startsWith(devServerUrl)) return; // HMR در حالت توسعه
+  if (isAllowedDevNavigation(url)) return; // همان origin دقیق Vite در حالت توسعه
   event.preventDefault();
   openExternalIfAllowed(url);
 });

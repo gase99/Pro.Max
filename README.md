@@ -69,9 +69,9 @@ npm run dist:win
 | --- | --- |
 | `npm run dev` | سرور توسعه‌ی Vite روی پورت ۵۱۷۳ |
 | `npm run build` | ساخت خروجی تولیدی در `dist/` (همراه با تزریق CSP) |
-| `npm start` | اجرای اپ Electron روی خروجی موجود `dist/` |
+| `npm start` | ساخت خروجی تولیدی و سپس اجرای اپ Electron |
 | `npm run desktop:dev` | اجرای همزمان Vite و پوسته‌ی Electron با DevTools |
-| `npm test` | آزمون موتور محاسبات با `node --test` |
+| `npm test` | آزمون موتور محاسبات، پیکربندی بسته‌بندی و CSP با `node --test` |
 | `npm run dist` | بسته‌ی نصبی سیستم فعلی با electron-builder |
 | `npm run dist:win` | نصب‌کننده‌ی NSIS ویندوز x64 |
 | `npm run dist:win:portable` | نسخه‌ی Portable ویندوز x64 (بدون نصب) |
@@ -82,8 +82,8 @@ npm run dist:win
 
 1. `npm ci` و `npm test` را اجرا می‌کند.
 2. `npm run dist:win` را می‌سازد.
-3. فایل `release/*.exe` را با `actions/upload-artifact@v4` به‌عنوان آرتیفکت `promax-cabinet-studio-windows-x64` آپلود می‌کند.
-4. در صورت اجرا روی تگ `v*`، همان فایل را به GitHub Release همان تگ ضمیمه می‌کند (`gh release upload`).
+3. نصب‌کننده‌ی `release/*.exe` را به `dist/` کپی می‌کند و `dist/*.exe` را با `actions/upload-artifact@v4` به‌عنوان آرتیفکت `promax-cabinet-studio-windows-x64` آپلود می‌کند.
+4. در صورت اجرا روی تگ `v*` (یا تعیین `release_tag` در اجرای دستی)، فایل نصب را به GitHub Release ضمیمه می‌کند.
 
 راه‌اندازی:
 
@@ -92,7 +92,7 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-اجرای دستی از تب Actions (workflow_dispatch) هم ممکن است؛ در آن حالت فقط آرتیفکت ساخته می‌شود، مگر آنکه در ورودی `release_tag` نام یک تگ موجود وارد شود.
+اجرای دستی از تب Actions (workflow_dispatch) هم ممکن است؛ اگر ref انتخاب‌شده تگ `v*` نباشد، فقط آرتیفکت ساخته می‌شود، مگر آنکه در ورودی `release_tag` نام یک تگ موجود وارد شود.
 
 بسته بدون امضای دیجیتال ساخته می‌شود (`CSC_IDENTITY_AUTO_DISCOVERY=false`)، پس ویندوز ممکن است هشدار SmartScreen نشان دهد. برای رفع آن باید گواهی Code Signing در Secrets مخزن تعریف شود.
 
@@ -124,6 +124,6 @@ git push origin v0.1.0
 | ۱ | ۰۶ فرمول‌های قابل تنظیم | high | M | — | ۱ |
 | ۲ | ۰۱ چیدمان بهینه‌ی برش | high | L | ۰۶ | ۲ |
 | ۳ | ۰۲ قیمت‌گذاری و پیش‌فاکتور | high | M | ۰۶ | ۳ |
-| ۴ | ۰۴ خروجی CNC و کارگاه | high/med | M | ۰۶، بهتر پس از ۰۱ | ۴ |
-| ۵ | ۰۵ مدیریت مشتری و سفارش | med | M | ۰۲ | ۴ |
+| ۴ | ۰۴ خروجی CNC و کارگاه | high/medium | M | ۰۶، بهتر پس از ۰۱ | ۴ |
+| ۵ | ۰۵ مدیریت مشتری و سفارش | medium | M | ۰۲ | ۴ |
 | ۶ | ۰۳ طراحی تصویری آشپزخانه | high (فروش) | L | ۰۶، ۰۱، بازطراحی مدل داده | ۵ |

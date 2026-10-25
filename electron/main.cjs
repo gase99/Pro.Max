@@ -14,6 +14,15 @@ function isExternalUrlAllowed(rawUrl) {
   }
 }
 
+function isAllowedDevNavigation(rawUrl) {
+  if (!isDev) return false;
+  try {
+    return new URL(rawUrl).origin === new URL(devServerUrl).origin;
+  } catch {
+    return false;
+  }
+}
+
 function openExternalIfAllowed(rawUrl) {
   if (isExternalUrlAllowed(rawUrl)) {
     shell.openExternal(rawUrl).catch(() => {});
@@ -28,7 +37,7 @@ function hardenWebContents(contents) {
   });
 
   contents.on('will-navigate', (event, url) => {
-    if (isDev && url.startsWith(devServerUrl)) return;
+    if (isAllowedDevNavigation(url)) return;
     event.preventDefault();
     openExternalIfAllowed(url);
   });
