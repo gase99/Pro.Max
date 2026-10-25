@@ -1,0 +1,80 @@
+name: Build Windows installer
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Optional tag to attach the installer to (leave empty to only keep the artifact)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-win-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-windows:
+    name: Windows x64 (NSIS)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run project tests
+        run: npm test
+
+      - name: Build NSIS installer
+        run: npm run dist:win
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      # electron-builder writes to release/. Stage only the installer at the
+      # requested dist/*.exe artifact path; dist/ also contains web build files.
+      - name: Stage installer under dist
+        shell: pwsh
+        run: |
+          $installers = @(Get-ChildItem -Path release -Filter '*.exe' -File)
+          if ($installers.Count -eq 0) {
+            throw 'No Windows installer was produced in release/.'
+          }
+          Copy-Item -Path $installers.FullName -Destination dist -Force
+          Get-ChildItem -Path dist -Filter '*.exe' -File | Format-Table Name, Length
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: promax-cabinet-studio-windows-x64
+          path: dist/*.exe
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Attach installer to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || inputs.release_tag }}
+          name: Pro.Max Cabinet Studio ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || inputs.release_tag }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: dist/*.exe
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

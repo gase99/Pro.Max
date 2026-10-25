@@ -56,11 +56,51 @@ npm run desktop:dev
 برای ساخت نصب‌کننده‌ی Windows x64 روی دستگاه Windows:
 
 ```bash
-npm install
+npm ci
 npm run dist:win
 ```
 
-خروجی نصب‌کننده در پوشه‌ی `release/` ساخته می‌شود. این مخزن کد و تنظیمات بسته‌بندی را نگه می‌دارد؛ فایل نصب‌کننده در Git ثبت نمی‌شود.
+خروجی نصب‌کننده در پوشه‌ی `release/` ساخته می‌شود
+(`Pro.Max-Cabinet-Studio-<version>-Setup.exe`) و در Git ثبت نمی‌شود.
+
+### اسکریپت‌ها
+
+| اسکریپت | کار |
+| --- | --- |
+| `npm run dev` | سرور توسعه‌ی Vite روی پورت ۵۱۷۳ |
+| `npm run build` | ساخت خروجی تولیدی در `dist/` (همراه با تزریق CSP) |
+| `npm start` | ساخت خروجی تولیدی و سپس اجرای اپ Electron |
+| `npm run desktop:dev` | اجرای همزمان Vite و پوسته‌ی Electron با DevTools |
+| `npm test` | آزمون موتور محاسبات، پیکربندی بسته‌بندی و CSP با `node --test` |
+| `npm run dist` | بسته‌ی نصبی سیستم فعلی با electron-builder |
+| `npm run dist:win` | نصب‌کننده‌ی NSIS ویندوز x64 |
+| `npm run dist:win:portable` | نسخه‌ی Portable ویندوز x64 (بدون نصب) |
+
+### ساخت خودکار نصب‌کننده با GitHub Actions
+
+گردش‌کار [`.github/workflows/build-win.yml`](.github/workflows/build-win.yml) روی `windows-latest` با Node 20 اجرا می‌شود و:
+
+1. `npm ci` و `npm test` را اجرا می‌کند.
+2. `npm run dist:win` را می‌سازد.
+3. نصب‌کننده‌ی `release/*.exe` را به `dist/` کپی می‌کند و `dist/*.exe` را با `actions/upload-artifact@v4` به‌عنوان آرتیفکت `promax-cabinet-studio-windows-x64` آپلود می‌کند.
+4. در صورت اجرا روی تگ `v*` (یا تعیین `release_tag` در اجرای دستی)، فایل نصب را به GitHub Release ضمیمه می‌کند.
+
+راه‌اندازی:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+اجرای دستی از تب Actions (workflow_dispatch) هم ممکن است؛ اگر ref انتخاب‌شده تگ `v*` نباشد، فقط آرتیفکت ساخته می‌شود، مگر آنکه در ورودی `release_tag` نام یک تگ موجود وارد شود.
+
+بسته بدون امضای دیجیتال ساخته می‌شود (`CSC_IDENTITY_AUTO_DISCOVERY=false`)، پس ویندوز ممکن است هشدار SmartScreen نشان دهد. برای رفع آن باید گواهی Code Signing در Secrets مخزن تعریف شود.
+
+### امنیت
+
+`electron/main.cjs` با `contextIsolation: true`، `nodeIntegration: false`، `sandbox: true`، `webviewTag: false` و `devTools` فقط در حالت توسعه اجرا می‌شود. هیچ IPC، preload یا `contextBridge`ی وجود ندارد؛ رندرر کاملاً محلی است و به فایل‌های سیستم دسترسی ندارد. تمام درخواست‌های permission رد می‌شوند و ناوبری به بیرون فقط با allowlist پروتکل `http/https` و در مرورگر سیستم انجام می‌شود. CSP در خروجی build به `dist/index.html` تزریق می‌شود.
+
+گزارش کامل: [`docs/security-review-electron.md`](docs/security-review-electron.md)
 
 ## محدودیت‌ها و پیشنهاد نسخه‌ی بعد
 
@@ -74,3 +114,16 @@ npm run dist:win
 4. **خروجی کارگاهی/CNC** شامل DXF/CSV، برچسب و بارکد قطعات.
 5. **مدیریت مشتری و سفارش**، نسخه‌بندی طرح، وضعیت اندازه‌گیری/ساخت/نصب و آرشیو.
 6. **فرمول‌های قابل تنظیم** برای لقی، ضخامت‌ها، درب، پشت‌بند و پروفایل هر کارگاه.
+
+### اولویت‌بندی پیشنهادها
+
+تحلیل کامل ارزش، پیچیدگی و وابستگی هر شش پیشنهاد در [`docs/roadmap-next-version.md`](docs/roadmap-next-version.md) آمده است. خلاصه‌ی ترتیب پیشنهادی:
+
+| رتبه | پیشنهاد | ارزش | پیچیدگی | وابستگی | فاز |
+| --- | --- | --- | --- | --- | --- |
+| ۱ | ۰۶ فرمول‌های قابل تنظیم | high | M | — | ۱ |
+| ۲ | ۰۱ چیدمان بهینه‌ی برش | high | L | ۰۶ | ۲ |
+| ۳ | ۰۲ قیمت‌گذاری و پیش‌فاکتور | high | M | ۰۶ | ۳ |
+| ۴ | ۰۴ خروجی CNC و کارگاه | high/medium | M | ۰۶، بهتر پس از ۰۱ | ۴ |
+| ۵ | ۰۵ مدیریت مشتری و سفارش | medium | M | ۰۲ | ۴ |
+| ۶ | ۰۳ طراحی تصویری آشپزخانه | high (فروش) | L | ۰۶، ۰۱، بازطراحی مدل داده | ۵ |
