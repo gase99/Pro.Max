@@ -592,3 +592,144 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
   .dashboard-grid, .dashboard-bottom-grid { grid-template-columns: 1.14fr .86fr; }
   .roadmap-grid { grid-template-columns: repeat(3,1fr); }
 }
+
+/* ---------------------------------------------------------------- */
+/* Cut optimisation: settings panel, results summary and sheet maps  */
+/* ---------------------------------------------------------------- */
+
+.optimizer-panel { margin-bottom: 16px; padding: 17px 19px; }
+.optimizer-panel-head { display: flex; align-items: flex-start; gap: 11px; }
+.optimizer-panel-icon { display: grid; flex: 0 0 38px; width: 38px; height: 38px; place-items: center; border-radius: 11px; color: #4b8c80; background: #edf6f2; }
+.optimizer-panel-head > div:last-child { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.optimizer-panel-head .card-overline { margin-bottom: 0; }
+.optimizer-panel-head h3 { margin: 0; color: #2f474b; font-size: 13px; font-weight: 700; }
+.optimizer-panel-head p { margin: 3px 0 0; color: #8a999c; font-size: 9px; line-height: 1.8; }
+.optimizer-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin-top: 15px; padding-top: 14px; border-top: 1px solid #eef2f3; }
+.optimizer-controls .numeric-field { width: 120px; }
+.optimizer-controls .numeric-field > span { color: #7b8c8f; font-size: 8px; }
+.optimizer-toggle { display: inline-flex; height: 35px; align-items: center; gap: 7px; padding: 0 10px; border: 1px solid #e4ebed; border-radius: 8px; color: #607477; background: #fbfdfd; font-size: 9px; white-space: nowrap; }
+.optimizer-toggle > span:last-child { font-size: 9px; color: #6f8285; }
+.optimizer-submit { min-height: 36px; margin-inline-start: auto; padding: 0 14px; font-size: 10px; }
+.optimizer-note { display: flex; align-items: flex-start; gap: 7px; margin-top: 12px; color: #96a3a5; font-size: 8px; line-height: 1.85; }
+.optimizer-note svg { flex: 0 0 auto; margin-top: 2px; color: #92b4ab; }
+.optimizer-panel .form-error { margin-top: 10px; }
+
+.cut-optimizer-results { display: flex; flex-direction: column; gap: 14px; margin: 2px 0 18px; scroll-margin-top: 86px; }
+.optimizer-summary { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 16px 19px; border-color: #e0ebe8; background: linear-gradient(115deg, #f8fcfb, #fff); }
+.optimizer-summary-main { display: flex; min-width: 0; align-items: flex-start; gap: 11px; }
+.optimizer-summary-icon { display: grid; flex: 0 0 40px; width: 40px; height: 40px; place-items: center; border-radius: 12px; color: #3f8378; background: #e9f4f0; }
+.optimizer-summary-main h3 { margin: 0; color: #30484c; font-size: 14px; font-weight: 700; }
+.optimizer-summary-main p { margin: 4px 0 0; color: #8b9a9d; font-size: 8.5px; line-height: 1.8; }
+.optimizer-summary-metrics { display: flex; flex: 0 0 auto; align-items: stretch; }
+.optimizer-summary-metrics > div { display: flex; min-width: 78px; flex-direction: column; gap: 3px; padding: 0 14px; border-left: 1px solid #e9f0ef; }
+.optimizer-summary-metrics > div:first-child { border-left: 0; }
+.optimizer-summary-metrics > div:last-child { padding-left: 0; }
+.optimizer-summary-metrics span { color: #8f9da0; font-size: 8px; }
+.optimizer-summary-metrics strong { color: #355156; font-size: 16px; line-height: 1.3; font-weight: 700; white-space: nowrap; }
+.optimizer-summary-metrics small { margin-right: 2px; color: #94a1a3; font-size: 8px; font-weight: 500; }
+.optimizer-rejected-info, .optimizer-stale-info { margin: 0; border-color: #f0e3da; color: #97715a; background: #fdf9f5; }
+.optimizer-stale-info { border-color: #efe6d2; color: #8f7a4f; background: #fdfaf2; }
+.optimizer-stale-info svg { color: #b59a62; }
+.optimizer-rejected-info svg { color: #bb916c; }
+.optimizer-materials { display: flex; flex-direction: column; gap: 14px; }
+
+.cutmap { padding: 17px 19px 14px; border: 1px solid #e6edef; border-radius: 16px; background: #fff; box-shadow: var(--shadow); }
+.cutmap-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 14px; }
+.cutmap-eyebrow { display: block; margin-bottom: 4px; color: #91a0a3; font-size: 9px; font-weight: 600; letter-spacing: .15px; }
+.cutmap-heading h3 { margin: 0; color: #2f474b; font-size: 16px; font-weight: 700; }
+.cutmap-heading p { margin: 4px 0 0; color: #8d9b9e; font-size: 9px; }
+.cutmap-sheet-chip { flex: 0 0 auto; padding: 6px 9px; border: 1px solid #dce9e5; border-radius: 8px; color: #4d7f74; background: #f2f9f6; font-size: 9px; font-weight: 600; white-space: nowrap; }
+.cutmap-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 15px; padding: 12px 4px; border: 1px solid #e8eeef; border-radius: 12px; background: #fbfdfd; }
+.cutmap-stat { display: flex; min-width: 0; flex-direction: column; gap: 3px; padding: 0 14px; border-left: 1px solid #edf2f2; }
+.cutmap-stat:first-child { padding-right: 8px; }
+.cutmap-stat:last-child { border-left: 0; }
+.cutmap-stat span { color: #8c9a9d; font-size: 8px; }
+.cutmap-stat strong { overflow: hidden; color: #355156; font-size: 17px; font-weight: 700; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.cutmap-stat small { color: #9aa7a9; font-size: 8px; line-height: 1.6; }
+.cutmap-stat-good strong { color: #3f8a6f; }
+.cutmap-stat-warn strong { color: #b47c41; }
+.cutmap-stat-bad strong { color: #b5645b; }
+.cutmap-rejected { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 13px; padding: 11px 12px; border: 1px solid #f0dfd8; border-radius: 9px; color: #a15f53; background: #fdf6f4; font-size: 9px; }
+.cutmap-rejected > svg { flex: 0 0 auto; margin-top: 1px; }
+.cutmap-rejected > div { display: flex; flex-direction: column; gap: 4px; }
+.cutmap-rejected strong { font-size: 9px; }
+.cutmap-rejected ul { display: flex; flex-direction: column; gap: 3px; margin: 0; padding: 0 15px 0 0; color: #a8786f; font-size: 8px; line-height: 1.7; }
+.cutmap-sheets { display: grid; grid-template-columns: repeat(auto-fill, minmax(218px, 1fr)); justify-content: start; gap: 12px; }
+.cutmap-sheet { margin: 0; padding: 8px 8px 7px; border: 1px solid #e7edef; border-radius: 12px; background: #fff; break-inside: avoid; }
+.cutmap-sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 1px 1px 7px; }
+.cutmap-sheet-head > div { display: flex; flex-direction: column; gap: 1px; }
+.cutmap-sheet-head strong { color: #3d5559; font-size: 10px; font-weight: 700; }
+.cutmap-sheet-head span { color: #9ba7a9; font-size: 8px; }
+.cutmap-util { padding: 3px 5px; border-radius: 5px; font-size: 7px !important; white-space: nowrap; }
+.cutmap-util-good { color: #3f806c; background: #eef7f3; }
+.cutmap-util-medium { color: #a47b45; background: #fbf5eb; }
+.cutmap-util-low { color: #a76760; background: #fdf2f1; }
+.cutmap-canvas { padding: 4px; border: 1px solid #eef2f3; border-radius: 8px; background: #f8fbfb; }
+.cutmap-svg { display: block; width: 100%; height: auto; }
+.cutmap-svg text { font-family: 'Vazirmatn', Tahoma, sans-serif; }
+.cutmap-piece rect { transition: stroke .12s, fill .12s; }
+.cutmap-piece:hover rect { stroke: #1f4d49; }
+.cutmap-sheet-foot { display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 6px 2px 0; color: #9aa7a9; font-size: 7.5px; white-space: nowrap; }
+.cutmap-sheet-foot span:last-child { color: #aab4b6; font-size: 7px; }
+.cutmap-empty { padding: 24px 16px; border: 1px dashed #dbe5e6; border-radius: 10px; color: #93a1a3; background: #fafcfc; font-size: 9px; text-align: center; }
+.cutmap-legend { margin: 12px 0 0; padding-top: 9px; border-top: 1px solid #eef2f3; color: #9aa7a9; font-size: 8px; line-height: 1.85; }
+
+@media (max-width: 1020px) {
+  .optimizer-summary { align-items: flex-start; flex-direction: column; gap: 13px; }
+  .optimizer-summary-metrics { width: 100%; }
+  .optimizer-summary-metrics > div { flex: 1; min-width: 0; }
+  .optimizer-submit { margin-inline-start: 0; }
+}
+
+@media (max-width: 840px) {
+  .cutmap-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 11px; }
+  .cutmap-stat:nth-child(2) { border-left: 0; }
+  .cutmap-stat:nth-child(3) { padding-right: 8px; }
+  .cutmap-sheets { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+}
+
+@media (max-width: 620px) {
+  .optimizer-panel { padding: 14px 13px; }
+  .optimizer-panel-head p { font-size: 8px; }
+  .optimizer-controls { gap: 8px; }
+  .optimizer-controls .numeric-field { width: calc(50% - 4px); }
+  .optimizer-toggle { width: 100%; justify-content: flex-start; }
+  .optimizer-submit { width: 100%; margin-top: 2px; }
+  .optimizer-summary { padding: 14px 13px; }
+  .optimizer-summary-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 0; }
+  .optimizer-summary-metrics > div { min-width: 0; padding: 0 10px; }
+  .optimizer-summary-metrics > div:nth-child(2) { border-left: 0; }
+  .optimizer-summary-metrics > div:nth-child(3) { padding-right: 0; }
+  .cutmap { padding: 14px 12px 12px; border-radius: 13px; }
+  .cutmap-heading { flex-direction: column; gap: 8px; }
+  .cutmap-heading h3 { font-size: 14px; }
+  .cutmap-stats { padding: 10px 2px; }
+  .cutmap-stat { padding: 0 9px; }
+  .cutmap-stat:first-child { padding-right: 4px; }
+  .cutmap-stat:nth-child(3) { padding-right: 4px; }
+  .cutmap-stat strong { font-size: 15px; }
+  .cutmap-stat small { font-size: 7px; }
+  .cutmap-sheets { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+  .cutmap-sheet { padding: 6px 6px 5px; }
+  .cutmap-sheet-head strong { font-size: 9px; }
+  .cutmap-util { font-size: 6.5px !important; }
+  .cutmap-sheet-foot { font-size: 6.5px; }
+  .cutmap-sheet-foot span:last-child { font-size: 6px; }
+}
+
+@media print {
+  .optimizer-panel { display: none !important; }
+  .cut-optimizer-results { margin: 0 0 12px; gap: 10px; }
+  .optimizer-summary { break-inside: avoid; padding: 10px 12px; box-shadow: none; }
+  .optimizer-summary-main h3 { font-size: 12px; }
+  .cutmap { padding: 10px; border-color: #dfe7e8; box-shadow: none; break-inside: auto; }
+  .cutmap-heading { margin-bottom: 8px; }
+  .cutmap-heading h3 { font-size: 13px; }
+  .cutmap-stats { margin-bottom: 9px; padding: 8px 2px; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .cutmap-stat strong { font-size: 13px; }
+  .cutmap-sheets { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; }
+  .cutmap-sheet { padding: 5px; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .cutmap-sheet-head span { font-size: 7px; }
+  .cutmap-sheet-foot { font-size: 6.5px; }
+  .cutmap-legend { margin-top: 8px; }
+}
