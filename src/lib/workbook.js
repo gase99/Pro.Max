@@ -1,5 +1,9 @@
 import { buildCutList, getDoorCount, parseNumber, summarizeMaterials, TYPE_LABELS } from './engine.js';
 
+const MAX_WORKBOOK_SIZE_BYTES = 25 * 1024 * 1024;
+const MAX_WORKSHEETS = 50;
+const MAX_WORKSHEET_ROWS = 10_000;
+const MAX_WORKSHEET_COLUMNS = 256;
 const faDigits = (value) => String(value).replace(/[0-9]/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'[Number(digit)]);
 
 function cellValue(sheet, row, column) {
@@ -87,9 +91,27 @@ function importCabinetSheet(sheet, type, startIndex = 1) {
 }
 
 export async function importWorkbook(file) {
+  if (!file || typeof file.arrayBuffer !== 'function') {
+    throw new Error('فایل انتخاب‌شده معتبر نیست.');
+  }
+  if (file.name && !/\.xlsx$/i.test(file.name)) {
+    throw new Error('فقط فایل‌های Excel با پسوند .xlsx پشتیبانی می‌شوند.');
+  }
+  if (!Number.isFinite(file.size) || file.size <= 0) {
+    throw new Error('فایل اکسل خالی یا اندازه‌ی آن نامعتبر است.');
+  }
+  if (file.size > MAX_WORKBOOK_SIZE_BYTES) {
+    throw new Error('حجم فایل اکسل نباید بیشتر از ۲۵ مگابایت باشد.');
+  }
+
   const { default: ExcelJS } = await import('exceljs');
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(await file.arrayBuffer());
+  if (workbook.worksheets.length > MAX_WORKSHEETS || workbook.worksheets.some((sheet) => (
+    sheet.rowCount > MAX_WORKSHEET_ROWS || sheet.columnCount > MAX_WORKSHEET_COLUMNS
+  ))) {
+    throw new Error('ساختار فایل اکسل بیش از حد بزرگ است؛ تعداد شیت، ردیف یا ستون را کاهش دهید.');
+  }
 
   const lowerSheet = sheetByName(workbook, 'کابینت زمینی');
   const upperSheet = sheetByName(workbook, 'کابینت هوایی');
@@ -121,7 +143,7 @@ export async function importWorkbook(file) {
   const fileName = file.name || 'فایل Excel';
   return {
     id: `project-${Date.now()}`,
-    name: fileName.replace(/\.(xlsx|xls)$/i, '') || 'پروژه واردشده',
+    name: fileName.replace(/\.xlsx$/i, '') || 'پروژه واردشده',
     customer: '',
     notes: 'یونیت‌ها از شیت‌های «کابینت زمینی»، «کابینت هوایی» و «کشو» خوانده شدند. برای اطمینان، ابعاد خروجی را با فایل اصلی تطبیق دهید.',
     sourceFile: fileName,

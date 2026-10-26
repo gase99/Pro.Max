@@ -22,7 +22,7 @@
 | IPC محدود با `contextBridge` + allowlist | ✅ هیچ IPC‌ای وجود ندارد (کمترین سطح ممکن) | ✅ همان، به‌علاوه‌ی ممنوعیت `<webview>` (`webviewTag: false`) و مسدودسازی `will-attach-webview` |
 | تعریف CSP | ❌ تعریف نشده بود | ✅ تزریق `meta` در build تولیدی از طریق پلاگین Vite |
 | `remote` module یا `eval` خطرناک | ✅ هیچ‌کدام استفاده نشده | ✅ هیچ‌کدام؛ `import()` تنها برای chunk محلی `exceljs` است |
-| بازکردن لینک خارجی | ⚠️ فقط `setWindowOpenHandler` (بدون محدودسازی ناوبری درون پنجره) | ✅ allowlist پروتکل `http/https` برای هر دو مسیر `window.open` و `will-navigate` |
+| بازکردن لینک خارجی | ⚠️ فقط `setWindowOpenHandler` (بدون محدودسازی ناوبری درون پنجره) | ✅ allowlist پروتکل `http/https` برای `window.open`، `will-navigate` و `will-redirect`؛ در توسعه فقط origin دقیق Vite مجاز است |
 | دسترسی‌های رندرر (permission) | ⚠️ پیش‌فرض Chromium | ✅ همه‌ی درخواست‌ها و بررسی‌ها با `false` رد می‌شوند |
 | `webSecurity` / محتوای ناامن | ⚠️ صریح نبود | ✅ `webSecurity: true` و `allowRunningInsecureContent: false` |
 | DevTools در نسخه‌ی نصب‌شده | ⚠️ باز بود | ✅ فقط در حالت `desktop:dev` فعال است (`devTools: isDev`) |
@@ -66,10 +66,16 @@ contents.on('will-navigate', (event, url) => {
   openExternalIfAllowed(url);
 });
 
+contents.on('will-redirect', (event, url) => {
+  if (isAllowedDevNavigation(url)) return;
+  event.preventDefault();
+  openExternalIfAllowed(url);
+});
+
 contents.on('will-attach-webview', (event) => event.preventDefault());
 ```
 
-پیش از این پچ، اگر کاربر یا محتوای مخدوش‌شده باعث ناوبری درون همان پنجره می‌شد (مثلاً کلیک روی لینک بدون `target=_blank`) صفحه‌ی جدید در بستر Electron باز می‌شد. اکنون همه‌ی ناوبری‌های خارج از اپ در مرورگر سیستم باز می‌شوند و پنجره‌ی اپ هرگز به مبدأ بیرونی نمی‌رود.
+پیش از این پچ، اگر کاربر یا محتوای مخدوش‌شده باعث ناوبری یا redirect در همان پنجره می‌شد (مثلاً کلیک روی لینک بدون `target=_blank` یا پاسخ redirect سرور)، صفحه‌ی جدید در بستر Electron باز می‌شد. اکنون ناوبری و redirect خارج از origin دقیق Vite در مرورگر سیستم باز می‌شوند و پنجره‌ی اپ به مبدأ بیرونی نمی‌رود.
 
 ### ۳) دسترسی‌ها و شناسه‌ی اپ
 
@@ -91,9 +97,9 @@ nodeIntegration: false, nodeIntegrationInWorker: false, nodeIntegrationInSubFram
 
 ### ۵) موارد بررسی‌شده و پاک
 
-- `src/lib/workbook.js`: تنها `import('exceljs')` پویا (chunk محلی) و ساخت `<a download>` برای Blob؛ هیچ `eval`/`Function` ندارد. ورودی اکسل با `ExcelJS` پارس می‌شود و مقادیر عددی با `parseNumber` اعتبارسنجی می‌شوند.
+- `src/lib/workbook.js`: تنها `import('exceljs')` پویا (chunk محلی) و ساخت `<a download>` برای Blob؛ هیچ `eval`/`Function` ندارد. ورودی فقط `.xlsx`، تا ۲۵ مگابایت، با محدودیت تعداد شیت/ردیف/ستون پذیرفته می‌شود؛ مقادیر عددی با `parseNumber` اعتبارسنجی می‌شوند.
 - `index.html`: بدون اسکریپت inline، بدون `onclick` درون‌خطی، بدون منبع CDN.
-- `src/App.jsx`: داده‌ی ذخیره‌شده در `localStorage` با `JSON.parse` در `try/catch` خوانده و شکل آن (`Array.isArray(units)`) بررسی می‌شود؛ هیچ HTML خام رندر نمی‌شود.
+- `src/App.jsx` و `src/lib/projectStorage.js`: داده‌ی `localStorage` با `JSON.parse` در `try/catch` خوانده می‌شود؛ نوع یونیت‌ها، فیلدهای پایه و یکتایی IDها پیش از render نرمال می‌شوند و ردیف‌های خراب/ناشناخته کنار گذاشته می‌شوند؛ هیچ HTML خام رندر نمی‌شود.
 - `package.json`: هیچ اسکریپت `postinstall` مشکوک یا credential هاردکدشده وجود ندارد.
 
 ## ریسک‌های باقی‌مانده و پیشنهادهای بعدی (خارج از دامنه‌ی این پچ)
@@ -104,7 +110,7 @@ nodeIntegration: false, nodeIntegrationInWorker: false, nodeIntegrationInSubFram
 | نبود `autoUpdater` و مسیر امضاشده‌ی به‌روزرسانی | پایین | پس از امضای بسته، `electron-updater` با `publish.provider: github` و امضای `latest.yml` |
 | CSP حاوی `'unsafe-inline'` برای استایل | پایین | در صورت بازنویسی استایل‌ها به کلاس‌های CSS، حذف `'unsafe-inline'` |
 | ذخیره‌سازی پروژه در `localStorage` بدون سقف حجم | پایین | مهاجرت به فایل پروژه‌ی JSON در `app.getPath('userData')` با IPC محدود + `contextBridge` |
-| فایل اکسل ورودی از منبع نامعتبر | پایین | محدود کردن حجم فایل پیش از پارس و نمایش هشدار در صورت ناشناخته‌بودن شیت‌ها |
+| فایل XLSX مخرب با نسبت فشرده‌سازی غیرعادی | پایین | فایل‌های بزرگ‌تر از ۲۵ MiB و ساختارهای دارای شیت/ردیف/ستون بیش از حد رد می‌شوند؛ سقف حجم فشرده، parser را در برابر همه‌ی zip-bombها مصون نمی‌کند |
 | نبود `electron` در حالت `sandbox` روی توزیع‌های لینوکسی قدیمی | پایین | مستندسازی پشتیبانی رسمی فقط Windows x64 |
 
 ## جمع‌بندی

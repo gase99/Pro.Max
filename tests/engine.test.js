@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createSampleProject } from '../src/data/sampleProject.js';
-import { buildCutList, getDoorCount, getProjectStats, parseNumber } from '../src/lib/engine.js';
+import { buildCutList, getDoorCount, getProjectStats, getProjectWarnings, parseNumber, summarizeMaterials } from '../src/lib/engine.js';
 
 const sample = createSampleProject();
 
@@ -54,4 +54,58 @@ test('project summary includes piece area and tape without claiming sheet counts
   assert.equal(stats.thinBoard, 29);
   assert.ok(stats.areaM2 > 89 && stats.areaM2 < 90);
   assert.ok(stats.edgeTapeCm > 12700 && stats.edgeTapeCm < 12800);
+});
+
+test('localized number parsing handles Persian/Arabic digits and common separators', () => {
+  assert.equal(parseNumber('۷۳٫۴'), 73.4);
+  assert.equal(parseNumber('١٢٣٫٤'), 123.4);
+  assert.equal(parseNumber('۱٬۲۳۴٫۵'), 1234.5);
+  assert.equal(parseNumber('1,234.56'), 1234.56);
+  assert.equal(parseNumber('1.234,56'), 1234.56);
+  assert.equal(parseNumber('73,4'), 73.4);
+  assert.equal(parseNumber('٧٣،٤'), 73.4);
+  assert.equal(parseNumber('1,234'), 1234);
+  assert.equal(parseNumber('12 cm', -1), -1);
+});
+
+test('project summary counts physical cabinets and drawers, including repeated quantities', () => {
+  const units = sample.units.map((unit) => {
+    if (unit.id === 'sample-lower-1') return { ...unit, quantity: 3 };
+    if (unit.id === 'sample-upper-1') return { ...unit, quantity: 2 };
+    if (unit.type === 'drawer') return { ...unit, count: 3 };
+    return unit;
+  });
+  const stats = getProjectStats(units);
+  assert.equal(stats.lowerCount, 13);
+  assert.equal(stats.upperCount, 21);
+  assert.equal(stats.unitCount, 34);
+  assert.equal(stats.drawerSetCount, 1);
+  assert.equal(stats.drawerCount, 3);
+});
+
+test('warnings catch invalid formulas, counts, and malformed rows without crashing', () => {
+  const warnings = getProjectWarnings([
+    null,
+    { id: 'short-lower', type: 'lower', name: 'زمینی نامعتبر', width: 3, depth: 0, height: 0, quantity: 0, shelfDepth: 0, railWidth: 0, doorHeight: 0, autoDoors: false, parts: { shelf: 1, rail: 1, doors: 20 } },
+    { id: 'short-upper', type: 'upper', name: 'هوایی نامعتبر', width: 80, depth: 35, height: 0.5, bottomDepth: 0, doorHeight: 0, quantity: 1, autoDoors: true, parts: { bottom: 1, back: 1 } },
+    { id: 'short-drawer', type: 'drawer', name: 'کشوی نامعتبر', count: 1, width: 50, depth: 50, height: 15 },
+    { id: 'unknown', type: 'other', name: 'نوع ناشناخته' }
+  ]);
+  assert.ok(warnings.some((item) => item.message.includes('اطلاعات این ردیف معتبر نیست')));
+  assert.ok(warnings.some((item) => item.message.includes('تعداد یونیت مشابه')));
+  assert.ok(warnings.some((item) => item.message.includes('ابعاد درب')));
+  assert.ok(warnings.some((item) => item.message.includes('ارتفاع پشت‌بند')));
+  assert.ok(warnings.some((item) => item.message.includes('عمق کف')));
+  assert.ok(warnings.some((item) => item.message.includes('قطعه‌ی پشت')));
+  assert.ok(warnings.some((item) => item.message.includes('نوع یونیت ناشناخته')));
+  assert.deepEqual(buildCutList([null, {}, 'invalid']), []);
+});
+
+test('material summaries ignore malformed values and do not concatenate numeric strings', () => {
+  const [summary] = summarizeMaterials([
+    { material: 'MDF', quantity: '2', areaM2: '1.25', edgeTapeCm: '20' },
+    null,
+    { material: '', quantity: 100, areaM2: 100, edgeTapeCm: 100 }
+  ]);
+  assert.deepEqual(summary, { material: 'MDF', pieces: 2, areaM2: 1.25, edgeTapeCm: 20, lineCount: 1 });
 });

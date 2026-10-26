@@ -15,7 +15,6 @@ import {
   Layers,
   LayoutDashboard,
   Menu,
-  MoreHorizontal,
   Package,
   PanelTop,
   Pencil,
@@ -41,10 +40,10 @@ import {
   TYPE_LABELS
 } from './lib/engine.js';
 import { exportProjectBackup, exportWorkbook, importWorkbook } from './lib/workbook.js';
+import { formatDimension, formatNumber } from './lib/format.js';
+import { normalizeSavedProject } from './lib/projectStorage.js';
 
 const STORAGE_KEY = 'promax-cabinet-studio-project-v1';
-const numberFormat = new Intl.NumberFormat('fa-IR', { maximumFractionDigits: 2 });
-const decimalFormat = new Intl.NumberFormat('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 });
 
 const navigation = [
   {
@@ -84,22 +83,18 @@ function loadProject() {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
-      if (parsed && Array.isArray(parsed.units)) return parsed;
+      const normalized = normalizeSavedProject(parsed);
+      if (normalized) {
+        if (normalized.units.length !== parsed.units.length) {
+          console.warn('Some invalid saved Pro.Max unit records were skipped while restoring the project.');
+        }
+        return normalized;
+      }
     }
   } catch (error) {
     console.warn('Could not load saved Pro.Max project', error);
   }
   return createSampleProject();
-}
-
-function formatNumber(value, decimals = 2) {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return '—';
-  return new Intl.NumberFormat('fa-IR', { maximumFractionDigits: decimals }).format(number);
-}
-
-function formatDimension(value) {
-  return `${formatNumber(value)} cm`;
 }
 
 function safeCopyUnit(unit) {
@@ -224,12 +219,15 @@ function App() {
     notify('پروژه‌ی خالی ساخته شد.', 'info');
   };
 
-  const handleImportClick = () => fileInputRef.current?.click();
+  const handleImportClick = () => {
+    if (!importing) fileInputRef.current?.click();
+  };
 
   const handleImport = async (event) => {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
+    if (project.units.length > 0 && !window.confirm('ورود فایل، پروژه‌ی فعلی را جایگزین می‌کند. برای نگه‌داشتن آن ابتدا پشتیبان بگیرید. ادامه می‌دهید؟')) return;
     setImporting(true);
     try {
       const imported = await importWorkbook(file);
@@ -267,7 +265,7 @@ function App() {
   const currentMeta = pageMeta[activePage] || pageMeta.overview;
 
   return (
-    <div className="app-shell" dir="rtl">
+    <div className="app-shell" dir="rtl" aria-busy={importing}>
       <Sidebar
         activePage={activePage}
         onNavigate={navigate}
@@ -310,7 +308,7 @@ function App() {
           </div>
         </header>
 
-        <input ref={fileInputRef} className="visually-hidden" type="file" accept=".xlsx" onChange={handleImport} />
+        <input ref={fileInputRef} className="visually-hidden" type="file" accept=".xlsx" disabled={importing} onChange={handleImport} />
 
         <div className="page-scroll">
           {activePage === 'overview' && (
@@ -386,6 +384,7 @@ function App() {
           }}
         />
       )}
+      {importing && <div className="import-overlay" role="status" aria-live="polite"><div><span className="spinner" /><span>در حال خواندن فایل و جایگزینی پروژه…</span></div></div>}
       {toast && <div className={`toast toast-${toast.tone}`} role="status">{toast.tone === 'error' ? <AlertTriangle size={17} /> : <CheckCircle2 size={17} />}{toast.message}</div>}
     </div>
   );
@@ -647,12 +646,12 @@ function UnitsPage({ project, filter, setFilter, search, setSearch, onAdd, onEdi
       </PageHeader>
 
       <div className="filter-toolbar">
-        <div className="segmented-control" role="tablist" aria-label="فیلتر نوع یونیت">
+        <div className="segmented-control" role="group" aria-label="فیلتر نوع یونیت">
           {[
             ['all', 'همه'],
             ['lower', 'زمینی'],
             ['upper', 'هوایی']
-          ].map(([id, label]) => <button key={id} className={filter === id ? 'selected' : ''} onClick={() => setFilter(id)}>{label}<span>{formatNumber(id === 'all' ? units.length : units.filter((unit) => unit.type === id).length, 0)}</span></button>)}
+          ].map(([id, label]) => <button key={id} className={filter === id ? 'selected' : ''} aria-pressed={filter === id} onClick={() => setFilter(id)}>{label}<span>{formatNumber(id === 'all' ? units.length : units.filter((unit) => unit.type === id).length, 0)}</span></button>)}
         </div>
         <label className="search-field"><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="جستجوی نام یونیت..." /></label>
       </div>
@@ -757,7 +756,11 @@ function CutListPage({ cutList, filter, setFilter, search, setSearch, page, setP
     return matchesType && matchesSearch;
   });
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const visibleRows = filtered.slice(page * pageSize, (page + 1) * pageSize);
+  const safePage = Math.max(0, Math.min(page, pageCount - 1));
+  useEffect(() => {
+    setPage((current) => Math.max(0, Math.min(current, pageCount - 1)));
+  }, [pageCount, setPage]);
+  const visibleRows = filtered.slice(safePage * pageSize, (safePage + 1) * pageSize);
   const totalPieces = filtered.reduce((sum, row) => sum + row.quantity, 0);
   const totalEdge = filtered.reduce((sum, row) => sum + row.edgeTapeCm, 0) / 100;
 
@@ -775,10 +778,10 @@ function CutListPage({ cutList, filter, setFilter, search, setSearch, page, setP
 
       <div className="card table-card cutlist-table-card">
         <div className="cutlist-toolbar">
-          <div className="segmented-control cut-filter" role="tablist" aria-label="فیلتر لیست برش">
+          <div className="segmented-control cut-filter" role="group" aria-label="فیلتر لیست برش">
             {[
               ['all', 'همه'], ['lower', 'زمینی'], ['upper', 'هوایی'], ['drawer', 'کشو']
-            ].map(([id, label]) => <button key={id} className={filter === id ? 'selected' : ''} onClick={() => { setFilter(id); setPage(0); }}>{label}</button>)}
+            ].map(([id, label]) => <button key={id} className={filter === id ? 'selected' : ''} aria-pressed={filter === id} onClick={() => { setFilter(id); setPage(0); }}>{label}</button>)}
           </div>
           <label className="search-field"><Search size={17} /><input value={search} onChange={(event) => { setSearch(event.target.value); setPage(0); }} placeholder="قطعه، متریال یا یونیت..." /></label>
         </div>
@@ -789,7 +792,7 @@ function CutListPage({ cutList, filter, setFilter, search, setSearch, page, setP
               <tbody>
                 {visibleRows.map((row, index) => (
                   <tr key={row.id}>
-                    <td><span className="table-index">{formatNumber(page * pageSize + index + 1, 0)}</span></td>
+                    <td><span className="table-index">{formatNumber(safePage * pageSize + index + 1, 0)}</span></td>
                     <td><div className="cut-unit"><span className={`mini-type-dot ${row.type}`} /><span>{row.unitName}</span></div></td>
                     <td><strong className="cut-part-name">{row.part}</strong></td>
                     <td><span className="material-pill">{row.material}</span></td>
@@ -802,7 +805,7 @@ function CutListPage({ cutList, filter, setFilter, search, setSearch, page, setP
             </table>
           </div>
         ) : <EmptyState title="قطعه‌ای پیدا نشد" detail="فیلتر یا عبارت جستجو را تغییر دهید." />}
-        <div className="table-footer"><span>نمایش {formatNumber(filtered.length ? page * pageSize + 1 : 0, 0)} تا {formatNumber(Math.min((page + 1) * pageSize, filtered.length), 0)} از {formatNumber(filtered.length, 0)} ردیف</span><div className="pagination"><button disabled={page <= 0} onClick={() => setPage((current) => Math.max(0, current - 1))} aria-label="صفحه قبلی"><ChevronLeft size={16} /></button><span>{formatNumber(page + 1, 0)} / {formatNumber(pageCount, 0)}</span><button disabled={page + 1 >= pageCount} onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))} aria-label="صفحه بعد"><ChevronLeft size={16} className="flip-icon" /></button></div></div>
+        <div className="table-footer"><span>نمایش {formatNumber(filtered.length ? safePage * pageSize + 1 : 0, 0)} تا {formatNumber(Math.min((safePage + 1) * pageSize, filtered.length), 0)} از {formatNumber(filtered.length, 0)} ردیف</span><div className="pagination"><button disabled={safePage <= 0} onClick={() => setPage(Math.max(0, safePage - 1))} aria-label="صفحه قبلی"><ChevronLeft size={16} /></button><span>{formatNumber(safePage + 1, 0)} / {formatNumber(pageCount, 0)}</span><button disabled={safePage + 1 >= pageCount} onClick={() => setPage(Math.min(pageCount - 1, safePage + 1))} aria-label="صفحه بعد"><ChevronLeft size={16} className="flip-icon" /></button></div></div>
       </div>
       <div className="inline-info"><AlertTriangle size={16} /><span>لیست برش از قواعد و مقادیر فایل اکسل بازسازی شده است. ضخامت تیغ اره، جهت رگه، پرت ورق خام و بهینه‌سازی چیدمان در نسخه‌ی فعلی لحاظ نمی‌شود.</span></div>
     </div>

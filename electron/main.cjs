@@ -42,6 +42,12 @@ function hardenWebContents(contents) {
     openExternalIfAllowed(url);
   });
 
+  contents.on('will-redirect', (event, url) => {
+    if (isAllowedDevNavigation(url)) return;
+    event.preventDefault();
+    openExternalIfAllowed(url);
+  });
+
   contents.on('will-attach-webview', (event) => {
     event.preventDefault();
   });
