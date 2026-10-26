@@ -9,6 +9,8 @@ export default defineConfig({
       'tests/optimizer.test.ts',
       'tests/cutmap.test.tsx',
       'tests/app-optimizer.test.tsx',
+      'tests/app-pricing.test.tsx',
+      'tests/pricing.test.ts',
       'tests/import-export.test.js'
     ]
   }

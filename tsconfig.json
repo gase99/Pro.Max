@@ -24,10 +24,14 @@
   },
   "include": [
     "src/lib/optimizer.ts",
+    "src/lib/pricing.ts",
+    "src/lib/pricingStorage.ts",
     "src/components/**/*.tsx",
     "tests/optimizer.test.ts",
     "tests/cutmap.test.tsx",
-    "vitest.config.ts",
-    "tests/app-optimizer.test.tsx"
+    "tests/app-optimizer.test.tsx",
+    "tests/app-pricing.test.tsx",
+    "tests/pricing.test.ts",
+    "vitest.config.ts"
   ]
 }

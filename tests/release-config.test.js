@@ -20,6 +20,8 @@ test('desktop scripts and NSIS x64 installer configuration are present', () => {
   assert.match(packageJson.scripts['test:node'], /node --test/);
   assert.match(packageJson.scripts['test:optimizer'], /vitest run tests\/optimizer\.test\.ts/);
   assert.match(packageJson.scripts['test:optimizer'], /tests\/cutmap\.test\.tsx/);
+  // Pricing logic, storage and formatting are part of the same TypeScript suite.
+  assert.match(packageJson.scripts['test:optimizer'], /tests\/pricing\.test\.ts/);
   assert.match(packageJson.scripts['test:import-export'], /vitest run tests\/import-export\.test\.js/);
   assert.match(packageJson.scripts.typecheck, /tsc --noEmit/);
   assert.equal(packageJson.devDependencies.vitest, '^4.1.12');

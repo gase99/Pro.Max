@@ -8,6 +8,7 @@ import {
   ChevronDown,
   ChevronLeft,
   CircleHelp,
+  Coins,
   Copy,
   DoorOpen,
   Download,
@@ -29,7 +30,10 @@ import {
   Upload,
   X
 } from 'lucide-react';
+import { CostBreakdown } from './components/CostBreakdown';
 import { CutMap } from './components/CutMap';
+import { InvoiceSheet } from './components/InvoiceSheet';
+import { PriceSettingsDialog } from './components/PriceSettingsDialog';
 import { createDefaultUnit, createSampleProject } from './data/sampleProject.js';
 import {
   buildCutList,
@@ -45,6 +49,8 @@ import {
   DEFAULT_SHEET,
   optimizeCutListByMaterial
 } from './lib/optimizer';
+import { calculateCost, costBatchesFromReport } from './lib/pricing';
+import { loadPriceSettings, savePriceSettings } from './lib/pricingStorage';
 import { exportProjectBackup, exportWorkbook, importWorkbook } from './lib/workbook.js';
 import { formatDimension, formatNumber } from './lib/format.js';
 import { normalizeSavedProject } from './lib/projectStorage.js';
@@ -141,6 +147,8 @@ function App() {
     allowRotation: true
   });
   const [optimization, setOptimization] = useState(null);
+  const [priceSettings, setPriceSettings] = useState(loadPriceSettings);
+  const [priceDialog, setPriceDialog] = useState(false);
   const fileInputRef = useRef(null);
   const toastTimer = useRef(null);
 
@@ -151,6 +159,28 @@ function App() {
   );
   const stats = useMemo(() => getProjectStats(project.units || [], cutList), [project.units, cutList]);
   const warnings = useMemo(() => getProjectWarnings(project.units || []), [project.units]);
+  const costBatches = useMemo(
+    () => (optimization ? costBatchesFromReport(optimization, cutList) : []),
+    [optimization, cutList]
+  );
+  const costEstimate = useMemo(() => {
+    if (!costBatches.length) return null;
+    try {
+      return calculateCost({
+        batches: costBatches,
+        settings: priceSettings,
+        unitCount: stats.unitCount
+      });
+    } catch (error) {
+      console.error('Cost estimate failed', error);
+      return null;
+    }
+  }, [costBatches, priceSettings, stats.unitCount]);
+  const invoiceIssuedOn = useMemo(() => new Date(), [costEstimate]);
+  const priceMaterials = useMemo(
+    () => [...new Set(cutList.map((row) => row.material).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fa')),
+    [cutList]
+  );
 
   useEffect(() => {
     setSaveState('saving');
@@ -290,6 +320,34 @@ function App() {
     }
   };
 
+  const openPriceSettings = () => setPriceDialog(true);
+
+  const savePrices = (next) => {
+    setPriceSettings(next);
+    setPriceDialog(false);
+    const persisted = savePriceSettings(next);
+    notify(
+      persisted ? 'قیمت‌های کارگاه ذخیره شد.' : 'قیمت‌ها اعمال شد، ولی ذخیره‌ی محلی ممکن نبود.',
+      persisted ? 'success' : 'warning'
+    );
+  };
+
+  const printInvoice = () => {
+    const body = document.body;
+    const cleanup = () => body.classList.remove('printing-invoice');
+    body.classList.add('printing-invoice');
+    window.addEventListener('afterprint', cleanup, { once: true });
+    try {
+      window.print();
+    } catch (error) {
+      console.error('Invoice print failed', error);
+      notify('چاپ پیش‌فاکتور انجام نشد.', 'error');
+      cleanup();
+    }
+    // Some embedded browsers never fire `afterprint`; never leave the page in print mode.
+    window.setTimeout(cleanup, 60000);
+  };
+
   const currentMeta = pageMeta[activePage] || pageMeta.overview;
 
   return (
@@ -299,6 +357,7 @@ function App() {
         onNavigate={navigate}
         onNewProject={startNewProject}
         onProjectSettings={() => setProjectDialog(true)}
+        onOpenPrices={openPriceSettings}
         project={project}
         isOpen={mobileOpen}
         onClose={() => setMobileOpen(false)}
@@ -321,6 +380,10 @@ function App() {
               <span className="save-dot" />
               <span>{saveState === 'saving' ? 'در حال ذخیره' : saveState === 'error' ? 'ذخیره نشد' : 'ذخیره خودکار'}</span>
             </div>
+            <button className="button button-quiet hide-small" onClick={openPriceSettings}>
+              <Coins size={16} />
+              <span>تنظیمات قیمت</span>
+            </button>
             <button className="button button-quiet hide-small" onClick={handleImportClick} disabled={importing}>
               {importing ? <span className="spinner" /> : <Upload size={16} />}
               <span>{importing ? 'در حال خواندن…' : 'ورود از Excel'}</span>
@@ -415,6 +478,9 @@ function App() {
               onSettingsChange={setOptimizerSettings}
               optimization={optimization}
               onOptimizationChange={setOptimization}
+              costEstimate={costEstimate}
+              onEditPrices={openPriceSettings}
+              onPrintInvoice={printInvoice}
             />
           )}
           {activePage === 'materials' && (
@@ -443,13 +509,32 @@ function App() {
           }}
         />
       )}
+      {priceDialog && (
+        <PriceSettingsDialog
+          settings={priceSettings}
+          materials={priceMaterials}
+          batches={costBatches}
+          unitCount={stats.unitCount || null}
+          onClose={() => setPriceDialog(false)}
+          onSave={savePrices}
+        />
+      )}
+      {costEstimate && activePage === 'cutlist' && (
+        <InvoiceSheet
+          estimate={costEstimate}
+          project={project}
+          cutList={cutList}
+          report={optimization}
+          issuedOn={invoiceIssuedOn}
+        />
+      )}
       {importing && <div className="import-overlay" role="status" aria-live="polite"><div><span className="spinner" /><span>در حال خواندن فایل و جایگزینی پروژه…</span></div></div>}
       {toast && <div className={`toast toast-${toast.tone}`} role="status">{toast.tone === 'error' || toast.tone === 'warning' ? <AlertTriangle size={17} /> : <CheckCircle2 size={17} />}{toast.message}</div>}
     </div>
   );
 }
 
-function Sidebar({ activePage, onNavigate, onNewProject, onProjectSettings, project, isOpen, onClose }) {
+function Sidebar({ activePage, onNavigate, onNewProject, onProjectSettings, onOpenPrices, project, isOpen, onClose }) {
   const lowerCount = project.units.filter((unit) => unit.type === 'lower').length;
   const upperCount = project.units.filter((unit) => unit.type === 'upper').length;
   const drawerCount = project.units.filter((unit) => unit.type === 'drawer').length;
@@ -494,6 +579,7 @@ function Sidebar({ activePage, onNavigate, onNewProject, onProjectSettings, proj
 
         <div className="sidebar-bottom">
           <div className="offline-note"><span className="offline-dot" /><span>ذخیره‌شده روی همین دستگاه</span></div>
+          <button className="price-settings-button" onClick={onOpenPrices}><Coins size={16} /><span>تنظیمات قیمت</span></button>
           <button className="new-project-button" onClick={onNewProject}><Plus size={17} /><span>پروژه‌ی جدید</span></button>
           <div className="sidebar-user">
             <div className="user-avatar">PM</div>
@@ -819,7 +905,10 @@ function CutListPage({
   settings,
   onSettingsChange,
   optimization,
-  onOptimizationChange
+  onOptimizationChange,
+  costEstimate,
+  onEditPrices,
+  onPrintInvoice
 }) {
   const [optimizerError, setOptimizerError] = useState('');
   const pageSize = 14;
@@ -980,6 +1069,15 @@ function CutListPage({
               />
             ))}
           </div>
+
+          {costEstimate && (
+            <CostBreakdown
+              estimate={costEstimate}
+              stale={isStale}
+              onEditPrices={onEditPrices}
+              onPrint={onPrintInvoice}
+            />
+          )}
         </div>
       )}
 
@@ -1068,7 +1166,7 @@ function MaterialsPage({ project, cutList, stats, onBackup }) {
 function RoadmapPage({ project, warnings }) {
   const suggestions = [
     { code: '01', title: 'بهینه‌سازی چیدمان برش', priority: 'پیاده‌سازی شد', description: 'چیدمان گیوتینی (Best Short Side Fit) با ابعاد ورق، ضخامت تیغ، چرخش قطعات، درصد پرت و نقشه‌ی SVG قابل چاپ.', icon: Scissors, tone: 'teal' },
-    { code: '02', title: 'قیمت‌گذاری و پیش‌فاکتور', priority: 'اولویت بالا', description: 'بانک قیمت MDF، نوار لبه و یراق‌آلات، محاسبه‌ی اجرت، مالیات و خروجی پیش‌فاکتور مشتری.', icon: Package, tone: 'orange' },
+    { code: '02', title: 'قیمت‌گذاری و پیش‌فاکتور', priority: 'پیاده‌سازی شد', description: 'بانک قیمت ورق MDF (عمومی و اختصاصی هر متریال)، نوار لبه، دستمزد و یراق‌آلات؛ ذخیره‌ی محلی و پیش‌فاکتور چاپی همراه لیست برش.', icon: Package, tone: 'teal' },
     { code: '03', title: 'طراحی تصویری آشپزخانه', priority: 'مرحله‌ی بعد', description: 'نقشه‌ی دوبعدی دیوارها، پنجره و لوازم؛ جابه‌جایی یونیت‌ها با کشیدن و رهاکردن و پیش‌نمایش سه‌بعدی.', icon: PanelTop, tone: 'blue' },
     { code: '04', title: 'خروجی CNC و کارگاه', priority: 'مرحله‌ی بعد', description: 'فایل DXF/CSV، برچسب قطعه با کد یونیت، بارکد، سوراخ‌کاری و خروجی متناسب با دستگاه و اپراتور.', icon: Boxes, tone: 'violet' },
     { code: '05', title: 'مدیریت مشتری و سفارش', priority: 'پیشنهادی', description: 'پرونده‌ی مشتری، نسخه‌بندی طرح، وضعیت اندازه‌گیری/ساخت/نصب، یادداشت‌ها و آرشیو جست‌وجوپذیر.', icon: FileSpreadsheet, tone: 'green' },
@@ -1112,7 +1210,7 @@ function RoadmapPage({ project, warnings }) {
         ))}
       </section>
 
-      <div className="limits-card"><div className="limits-icon"><AlertTriangle size={18} /></div><div><strong>محدودیت‌های نسخه‌ی فعلی</strong><p>محاسبات با قواعد دیده‌شده در شیت‌های اکسل انجام می‌شود. قیمت، جهت رگه، رزرو لبه‌ی خام، یراق‌آلات، کف کشو، CNC و نقشه‌ی نصب هنوز محاسبه نمی‌شوند. {warnings.length > 0 && `${formatNumber(warnings.length, 0)} هشدار ابعادی هم برای بررسی وجود دارد.`}</p></div></div>
+      <div className="limits-card"><div className="limits-icon"><AlertTriangle size={18} /></div><div><strong>محدودیت‌های نسخه‌ی فعلی</strong><p>محاسبات با قواعد دیده‌شده در شیت‌های اکسل انجام می‌شود. جهت رگه، رزرو لبه‌ی خام، کف کشو، مالیات و نقشه‌ی نصب هنوز محاسبه نمی‌شوند؛ قیمت و یراق‌آلات فقط بر اساس مقادیر دستی همین برنامه برآورد می‌شوند. {warnings.length > 0 && `${formatNumber(warnings.length, 0)} هشدار ابعادی هم برای بررسی وجود دارد.`}</p></div></div>
     </div>
   );
 }

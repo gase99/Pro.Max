@@ -15,7 +15,7 @@
     "start": "npm run build && electron .",
     "test": "npm run typecheck && npm run test:node && npm run test:optimizer && npm run test:import-export",
     "test:node": "node --test tests/app-render.test.js tests/electron-security.test.js tests/engine.test.js tests/format.test.js tests/project-storage.test.js tests/release-config.test.js tests/workbook.test.js",
-    "test:optimizer": "vitest run tests/optimizer.test.ts tests/cutmap.test.tsx tests/app-optimizer.test.tsx",
+    "test:optimizer": "vitest run tests/optimizer.test.ts tests/cutmap.test.tsx tests/app-optimizer.test.tsx tests/pricing.test.ts tests/app-pricing.test.tsx",
     "test:import-export": "vitest run tests/import-export.test.js",
     "preview": "vite preview --host 0.0.0.0",
     "desktop:dev": "concurrently -k \"npm:dev\" \"wait-on http://127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron electron/main.cjs\"",
