@@ -88,12 +88,20 @@ async function exportToBlob(project) {
 }
 
 describe('real Excel workbook fixture', () => {
-  it.skipIf(!hasRealFixture)('imports 11 ground and 20 wall units from analiz-pro-2.xlsx', async () => {
+  it.skipIf(!hasRealFixture)('validates five sheets, 11 ground units, 20 wall units, and real door-width rules', async () => {
     const bytes = readFileSync(realFixturePath);
-    const project = await importWorkbook(asWorkbookFile(bytes, 'analiz-pro-2.xlsx'));
+    const rawWorkbook = new ExcelJS.Workbook();
+    await rawWorkbook.xlsx.load(bytes);
+    expect(rawWorkbook.worksheets).toHaveLength(5);
 
-    expect(project.units.filter((unit) => unit.type === 'lower')).toHaveLength(11);
-    expect(project.units.filter((unit) => unit.type === 'upper')).toHaveLength(20);
+    const project = await importWorkbook(asWorkbookFile(bytes, 'analiz-pro-2.xlsx'));
+    const groundUnits = project.units.filter((unit) => unit.type === 'lower');
+    const wallUnits = project.units.filter((unit) => unit.type === 'upper');
+    expect(groundUnits).toHaveLength(11);
+    expect(wallUnits).toHaveLength(20);
+    expect(groundUnits.some((unit) => unit.width === 30 && getDoorCount(unit) === 1)).toBe(true);
+    expect(groundUnits.some((unit) => unit.width === 80 && getDoorCount(unit) === 2)).toBe(true);
+    expect(project.importWarnings.some((warning) => warning.includes('ارجاع فرمولی بین‌شیتی'))).toBe(true);
   });
 });
 
@@ -173,5 +181,6 @@ describe('Excel import tolerance and export round-trip', () => {
     expect(restored.name).toBe(imported.name);
     expect(restored.customer).toBe(imported.customer);
     expect(restored.units).toEqual(imported.units);
+    expect(restored.importWarnings).toEqual(imported.importWarnings);
   });
 });

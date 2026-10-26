@@ -103,6 +103,27 @@ function safeCount(sheet, row, column, fallback = 0, warnings = []) {
   return Math.floor(parsed);
 }
 
+function auditFormulaReferences(workbook, warnings) {
+  let unresolvedCrossSheet = 0;
+  let unresolvedLocal = 0;
+  for (const sheet of workbook.worksheets) {
+    sheet.eachRow((row) => row.eachCell((cell) => {
+      const raw = cell.value;
+      if (!raw || typeof raw !== 'object') return;
+      const formula = [raw.formula, raw.sharedFormula].filter((part) => typeof part === 'string').join(' ');
+      if (!formula || !isBrokenExcelValue(raw)) return;
+      if (formula.includes('!')) unresolvedCrossSheet += 1;
+      else unresolvedLocal += 1;
+    }));
+  }
+  if (unresolvedCrossSheet > 0) {
+    addImportWarning(warnings, `${faDigits(unresolvedCrossSheet)} ارجاع فرمولی بین‌شیتی نتیجه‌ی ذخیره‌شده ندارد؛ این فرمول‌های تحلیلی نادیده گرفته می‌شوند تا محاسبه‌ی پروژه با داده‌ی خراب متوقف نشود.`);
+  }
+  if (unresolvedLocal > 0) {
+    addImportWarning(warnings, `${faDigits(unresolvedLocal)} فرمول در فایل نتیجه‌ی ذخیره‌شده‌ی معتبر ندارد؛ مقادیر نامعتبر هنگام ورود به‌صورت NaN امن نگه‌داری می‌شوند.`);
+  }
+}
+
 function sheetByName(workbook, name) {
   return workbook.getWorksheet(name)
     || workbook.worksheets.find((sheet) => sheet.name.trim().replace(/\s+/g, ' ') === name);
@@ -278,9 +299,15 @@ export async function importWorkbook(file) {
   }
 
   const importWarnings = [];
+  auditFormulaReferences(workbook, importWarnings);
   const backupSheet = workbook.getWorksheet(PROJECT_BACKUP_SHEET);
   const backupProject = backupSheet && readProjectBackup(backupSheet, importWarnings);
-  if (backupProject) return backupProject;
+  if (backupProject) {
+    return {
+      ...backupProject,
+      importWarnings: [...new Set([...importWarnings, ...(backupProject.importWarnings || [])])]
+    };
+  }
 
   const lowerSheet = sheetByName(workbook, 'کابینت زمینی');
   const upperSheet = sheetByName(workbook, 'کابینت هوایی');
