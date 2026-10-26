@@ -123,6 +123,9 @@ function App() {
   const [dialog, setDialog] = useState(null);
   const [projectDialog, setProjectDialog] = useState(false);
   const [toast, setToast] = useState(null);
+  const [importWarnings, setImportWarnings] = useState(() => (
+    Array.isArray(project.importWarnings) ? project.importWarnings : []
+  ));
   const [mobileOpen, setMobileOpen] = useState(false);
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef(null);
@@ -215,6 +218,7 @@ function App() {
       createdAt: new Date().toISOString(),
       units: []
     });
+    setImportWarnings([]);
     setActivePage('units');
     notify('پروژه‌ی خالی ساخته شد.', 'info');
   };
@@ -232,8 +236,15 @@ function App() {
     try {
       const imported = await importWorkbook(file);
       updateProject(imported);
+      setImportWarnings(imported.importWarnings || []);
       setActivePage('overview');
-      notify(`${imported.units.length} ردیف از فایل «${file.name}» وارد شد.`);
+      const warningCount = imported.importWarnings?.length || 0;
+      notify(
+        warningCount
+          ? `${imported.units.length} ردیف وارد شد؛ ${warningCount} هشدار Excel را بررسی کنید.`
+          : `${imported.units.length} ردیف از فایل «${file.name}» وارد شد.`,
+        warningCount ? 'warning' : 'success'
+      );
     } catch (error) {
       console.error('Excel import failed', error);
       notify(error?.message || 'خواندن فایل اکسل انجام نشد.', 'error');
@@ -307,6 +318,32 @@ function App() {
             </button>
           </div>
         </header>
+
+        {importWarnings.length > 0 && (
+          <section className="import-warning-banner" role="alert" aria-live="polite">
+            <AlertTriangle size={19} />
+            <div className="import-warning-copy">
+              <strong>فایل Excel با هشدار وارد شد</strong>
+              <ul>
+                {importWarnings.slice(0, 5).map((warning, index) => <li key={`${index}-${warning}`}>{warning}</li>)}
+              </ul>
+              {importWarnings.length > 5 && <span>و {formatNumber(importWarnings.length - 5)} هشدار دیگر…</span>}
+            </div>
+            <button
+              className="icon-button import-warning-dismiss"
+              aria-label="بستن هشدارهای ورود Excel"
+              onClick={() => {
+                setImportWarnings([]);
+                updateProject((current) => {
+                  const { importWarnings: _importWarnings, ...withoutWarnings } = current;
+                  return withoutWarnings;
+                });
+              }}
+            >
+              <X size={17} />
+            </button>
+          </section>
+        )}
 
         <input ref={fileInputRef} className="visually-hidden" type="file" accept=".xlsx" disabled={importing} onChange={handleImport} />
 
@@ -385,7 +422,7 @@ function App() {
         />
       )}
       {importing && <div className="import-overlay" role="status" aria-live="polite"><div><span className="spinner" /><span>در حال خواندن فایل و جایگزینی پروژه…</span></div></div>}
-      {toast && <div className={`toast toast-${toast.tone}`} role="status">{toast.tone === 'error' ? <AlertTriangle size={17} /> : <CheckCircle2 size={17} />}{toast.message}</div>}
+      {toast && <div className={`toast toast-${toast.tone}`} role="status">{toast.tone === 'error' || toast.tone === 'warning' ? <AlertTriangle size={17} /> : <CheckCircle2 size={17} />}{toast.message}</div>}
     </div>
   );
 }

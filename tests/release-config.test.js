@@ -11,7 +11,10 @@ test('desktop scripts and NSIS x64 installer configuration are present', () => {
   assert.match(packageJson.scripts.start, /npm run build.*electron/);
   assert.match(packageJson.scripts.dist, /npm run build.*electron-builder/);
   assert.match(packageJson.scripts['dist:win'], /npm run build.*--win nsis.*--publish never/);
-  assert.equal(packageJson.scripts.test, 'node --test');
+  assert.match(packageJson.scripts.test, /test:node.*test:import-export/);
+  assert.match(packageJson.scripts['test:node'], /node --test/);
+  assert.match(packageJson.scripts['test:import-export'], /vitest run tests\/import-export\.test\.js/);
+  assert.equal(packageJson.devDependencies.vitest, '^4.1.12');
 
   assert.equal(packageJson.build.appId, 'com.promax.cabinetstudio');
   assert.equal(packageJson.build.productName, 'Pro.Max Cabinet Studio');

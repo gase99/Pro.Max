@@ -13,7 +13,9 @@
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "start": "npm run build && electron .",
-    "test": "node --test",
+    "test": "npm run test:node && npm run test:import-export",
+    "test:node": "node --test tests/app-render.test.js tests/electron-security.test.js tests/engine.test.js tests/format.test.js tests/project-storage.test.js tests/release-config.test.js tests/workbook.test.js",
+    "test:import-export": "vitest run tests/import-export.test.js",
     "preview": "vite preview --host 0.0.0.0",
     "desktop:dev": "concurrently -k \"npm:dev\" \"wait-on http://127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron electron/main.cjs\"",
     "dist": "npm run build && electron-builder --publish never",
@@ -34,6 +36,7 @@
     "electron": "^45.0.0",
     "electron-builder": "^26.18.0",
     "vite": "^8.3.5",
+    "vitest": "^4.1.12",
     "wait-on": "^9.5.1"
   },
   "overrides": {

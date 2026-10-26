@@ -76,7 +76,7 @@ test('Excel import rejects unsupported and oversized files before reading them',
 
 test('Excel import reports workbooks without supported cabinet sheets', async () => {
   const file = await createWorkbookFile((workbook) => workbook.addWorksheet('نامعتبر'));
-  await assert.rejects(importWorkbook(file), /شیت‌های «کابینت زمینی» یا «کابینت هوایی»/);
+  await assert.rejects(importWorkbook(file), /شیت‌های پشتیبانی‌شده‌ی «کابینت زمینی»، «کابینت هوایی» یا «کشو»/);
 });
 
 test('Excel import rejects excessively tall worksheets after parsing', async () => {
@@ -145,7 +145,9 @@ test('Excel export creates all documented sheets and preserves cut-list rows', a
   assert.match(downloadedName, /آزمون-لیست-برش\.xlsx$/);
   const exported = new ExcelJS.Workbook();
   await exported.xlsx.load(await downloadedBlob.arrayBuffer());
-  assert.deepEqual(exported.worksheets.map((sheet) => sheet.name), ['لیست برش', 'خلاصه متریال', 'یونیت‌ها', 'روش محاسبه']);
+  assert.deepEqual(exported.worksheets.map((sheet) => sheet.name), ['لیست برش', 'خلاصه متریال', 'یونیت‌ها', 'روش محاسبه', 'Pro.Max data']);
+  assert.equal(exported.getWorksheet('Pro.Max data').state, 'veryHidden');
+  assert.equal(exported.getWorksheet('Pro.Max data').getCell('A1').value, 'PROMAX_PROJECT_V1');
   assert.equal(exported.getWorksheet('لیست برش').rowCount, 7);
   assert.equal(exported.getWorksheet('یونیت‌ها').getRow(2).getCell(1).value, 'زمینی ۱');
 });
