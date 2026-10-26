@@ -436,9 +436,21 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .local-data-note { display: flex; align-items: flex-start; gap: 7px; padding: 9px 10px; border-radius: 8px; color: #628375; background: #eff7f2; font-size: 8px; line-height: 1.7; }
 .local-data-note svg { flex: 0 0 auto; margin-top: 1px; }
 
+.import-overlay { position: fixed; z-index: 200; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(23, 43, 47, .35); backdrop-filter: blur(3px); }
+.import-overlay > div { display: flex; align-items: center; gap: 10px; padding: 15px 19px; border: 1px solid #e2ece9; border-radius: 11px; color: #47786c; background: #fff; box-shadow: 0 10px 35px rgba(30, 55, 58, .18); font-size: 10px; }
+.import-overlay .spinner { border-color: rgba(71, 120, 108, .22); border-top-color: currentColor; }
+.import-warning-banner { display: flex; align-items: flex-start; gap: 10px; margin: 12px 32px 0; padding: 12px 14px; border: 1px solid #efd987; border-radius: 10px; color: #765d14; background: #fff9df; font-size: 10px; line-height: 1.8; }
+.import-warning-banner > svg { flex: 0 0 auto; margin-top: 2px; color: #b58a19; }
+.import-warning-copy { min-width: 0; flex: 1; }
+.import-warning-copy strong { display: block; margin-bottom: 3px; color: #68520f; font-size: 11px; }
+.import-warning-copy ul { display: grid; gap: 1px; margin: 0; padding: 0 16px 0 0; }
+.import-warning-copy li { padding-right: 1px; }
+.import-warning-copy > span { display: inline-block; margin-top: 2px; color: #8c711f; }
+.import-warning-dismiss { width: 28px; height: 28px; flex: 0 0 auto; color: #8c711f; }
 .toast { position: fixed; z-index: 150; right: 275px; bottom: 22px; display: flex; max-width: min(440px, calc(100vw - 32px)); align-items: center; gap: 9px; padding: 12px 15px; border: 1px solid #d9eae2; border-radius: 10px; color: #47786c; background: #f7fcf8; box-shadow: 0 8px 30px rgba(30, 55, 58, .13); font-size: 10px; animation: toast-in .2s ease-out; }
 .toast svg { flex: 0 0 auto; }
 .toast-error { border-color: #efd9d6; color: #a35750; background: #fff8f7; }
+.toast-warning { border-color: #efd987; color: #765d14; background: #fff9df; }
 .toast-info { border-color: #e2e8e9; color: #657d80; background: #fbfdfd; }
 @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.35); border-top-color: currentColor; border-radius: 50%; animation: spin .8s linear infinite; }
@@ -449,6 +461,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
   .sidebar { flex-basis: 232px; width: 232px; }
   .page-scroll { padding-right: 25px; padding-left: 25px; }
   .topbar { padding-right: 25px; padding-left: 25px; }
+  .import-warning-banner { margin-right: 25px; margin-left: 25px; }
   .stats-grid { gap: 10px; }
   .stat-card { padding-right: 12px; padding-left: 12px; gap: 9px; }
   .stat-copy strong { font-size: 20px; }
@@ -468,6 +481,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 @media (max-width: 840px) {
   .page-scroll { padding: 23px 20px 40px; }
   .topbar { min-height: 64px; padding: 0 19px; }
+  .import-warning-banner { margin-right: 19px; margin-left: 19px; }
   .hide-medium { display: none; }
   .project-hero { min-height: 235px; padding: 23px; }
   .hero-copy { min-width: 280px; }
@@ -486,6 +500,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 
 @media (max-width: 620px) {
   .topbar { min-height: 58px; gap: 8px; padding: 0 12px; }
+  .import-warning-banner { gap: 7px; margin: 9px 12px 0; padding: 10px; font-size: 9px; }
+  .import-warning-copy strong { font-size: 10px; }
   .topbar-start { gap: 7px; }
   .breadcrumb { gap: 5px; font-size: 9px; }
   .breadcrumb strong { font-size: 10px; }
@@ -577,7 +593,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 
 @media print {
   :root, body { background: #fff !important; }
-  .sidebar, .sidebar-scrim, .topbar, .page-heading-actions, .unit-actions, .filter-toolbar, .cutlist-toolbar, .table-footer, .toast, .new-project-button, .hero-link, .text-link, .icon-button { display: none !important; }
+  .sidebar, .sidebar-scrim, .topbar, .import-warning-banner, .page-heading-actions, .unit-actions, .filter-toolbar, .cutlist-toolbar, .table-footer, .toast, .new-project-button, .hero-link, .text-link, .icon-button { display: none !important; }
   .app-shell, .main-area { display: block; min-height: 0; }
   .page-scroll { padding: 0; }
   .content-wrap { width: 100%; }

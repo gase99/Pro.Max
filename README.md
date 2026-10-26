@@ -27,7 +27,9 @@
 - افزودن، ویرایش، کپی و حذف یونیت زمینی، هوایی و مجموعه‌ی کشو.
 - محاسبه‌ی زنده‌ی قطعات برش، تعداد درب خودکار، متراژ نوار لبه و مساحت مواد.
 - جست‌وجو و فیلتر در فهرست یونیت‌ها و لیست برش.
-- ورود داده از فایل `.xlsx` و خروجی Excel چندشیتی (لیست برش، خلاصه‌ی متریال، یونیت‌ها و روش محاسبه).
+- ورود داده از فایل `.xlsx` (حداکثر ۲۵ مگابایت؛ پس از تأیید جایگزین پروژه‌ی جاری می‌شود) و خروجی Excel چندشیتی (لیست برش، خلاصه‌ی متریال، یونیت‌ها و روش محاسبه) به‌همراه شیت پشتیبان پنهان برای بازگردانی دقیق پروژه.
+- ورود Excel در برابر ارجاع‌های خراب، یونیت‌های غیرفعال و شیت کشوی خالی مقاوم است و هشدارهای فارسی را به‌صورت بنر زرد RTL نمایش می‌دهد.
+- چیدمان بهینه‌ی برش روی ورق (الگوریتم گیوتین) با ابعاد ورق و ضخامت تیغ قابل تنظیم، درصد پرت و نقشه‌ی SVG هر ورق.
 - چاپ یا ذخیره‌ی PDF از پنجره‌ی چاپ؛ خروجی پشتیبان JSON.
 - ذخیره‌ی خودکار پروژه در حافظه‌ی محلی مرورگر/برنامه‌ی دسکتاپ؛ بدون ارسال داده به سرور.
 - بسته‌بندی دسکتاپ با Electron برای Windows.
@@ -41,7 +43,7 @@ npm install
 npm run dev
 ```
 
-آزمون فرمول‌ها:
+آزمون‌ها و اعتبارسنجی‌های پروژه:
 
 ```bash
 npm test
@@ -71,9 +73,10 @@ npm run dist:win
 | `npm run build` | ساخت خروجی تولیدی در `dist/` (همراه با تزریق CSP) |
 | `npm start` | ساخت خروجی تولیدی و سپس اجرای اپ Electron |
 | `npm run desktop:dev` | اجرای همزمان Vite و پوسته‌ی Electron با DevTools |
-| `npm test` | بررسی تایپ‌ها و اجرای همه‌ی آزمون‌ها (بهینه‌سازی برش، موتور محاسبات، پیکربندی بسته‌بندی و CSP) |
-| `npm run test:optimizer` | آزمون‌های TypeScript الگوریتم برش و نقشه‌ی SVG با Vitest |
-| `npm run test:engine` | آزمون‌های `node --test` برای محاسبات اکسل و پیکربندی انتشار |
+| `npm test` | بررسی تایپ‌ها و اجرای همه‌ی آزمون‌ها: موتور و Excel و امنیت با `node --test`، بهینه‌سازی برش و رفت‌وبرگشت Excel با Vitest |
+| `npm run test:node` | آزمون‌های `node --test`: موتور، Excel، بازیابی پروژه، رندر RTL، امنیت Electron و پیکربندی انتشار |
+| `npm run test:optimizer` | آزمون‌های TypeScript الگوریتم برش، نقشه‌ی SVG و جریان UI با Vitest |
+| `npm run test:import-export` | آزمون رفت‌وبرگشت واقعی `analiz pro.2.xlsx` با Vitest |
 | `npm run typecheck` | `tsc --noEmit` در حالت strict |
 | `npm run dist` | بسته‌ی نصبی سیستم فعلی با electron-builder |
 | `npm run dist:win` | نصب‌کننده‌ی NSIS ویندوز x64 |
@@ -101,7 +104,7 @@ git push origin v0.1.0
 
 ### امنیت
 
-`electron/main.cjs` با `contextIsolation: true`، `nodeIntegration: false`، `sandbox: true`، `webviewTag: false` و `devTools` فقط در حالت توسعه اجرا می‌شود. هیچ IPC، preload یا `contextBridge`ی وجود ندارد؛ رندرر کاملاً محلی است و به فایل‌های سیستم دسترسی ندارد. تمام درخواست‌های permission رد می‌شوند و ناوبری به بیرون فقط با allowlist پروتکل `http/https` و در مرورگر سیستم انجام می‌شود. CSP در خروجی build به `dist/index.html` تزریق می‌شود.
+`electron/main.cjs` با `contextIsolation: true`، `nodeIntegration: false`، `sandbox: true`، `webviewTag: false` و `devTools` فقط در حالت توسعه اجرا می‌شود. هیچ IPC، preload یا `contextBridge`ی وجود ندارد؛ رندرر کاملاً محلی است و به فایل‌های سیستم دسترسی ندارد. تمام درخواست‌های permission رد می‌شوند؛ ناوبری و redirect بیرونی با allowlist پروتکل `http/https` به مرورگر سیستم سپرده می‌شود و در توسعه فقط origin دقیق Vite مجاز است. CSP در خروجی build به `dist/index.html` تزریق می‌شود.
 
 گزارش کامل: [`docs/security-review-electron.md`](docs/security-review-electron.md)
 

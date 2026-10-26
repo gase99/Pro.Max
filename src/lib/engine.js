@@ -13,23 +13,55 @@ const DOOR_GAP = 0.2;
 export function parseNumber(value, fallback = 0) {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (value === null || value === undefined || value === '') return fallback;
-  const normalized = String(value)
-    .replace(/[۰-۹]/g, (digit) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)))
-    .replace(/[٠-٩]/g, (digit) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
+
+  let normalized = String(value)
+    .replace(/[۰-۹٠-٩]/g, (digit) => String('۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩'.indexOf(digit) % 10))
+    .replace(/[−–]/g, '-')
+    .replace(/[\s\u00a0\u202f]/g, '')
     .replace(/٫/g, '.')
-    .replace(/٬/g, '')
-    .replace(/,/g, '.')
-    .replace(/\s/g, '');
-  const parsed = Number.parseFloat(normalized);
+    .replace(/،/g, ',')
+    .replace(/٬/g, '');
+
+  const commaCount = (normalized.match(/,/g) || []).length;
+  const hasDot = normalized.includes('.');
+  if (commaCount && hasDot) {
+    if (normalized.lastIndexOf(',') > normalized.lastIndexOf('.')) {
+      // European-style grouping and decimal separators, e.g. 1.234,56.
+      normalized = normalized.replace(/\./g, '').replace(/,/g, '.');
+    } else {
+      // English-style grouping and decimal separators, e.g. 1,234.56.
+      normalized = normalized.replace(/,/g, '');
+    }
+  } else if (commaCount === 1) {
+    const [integer, fraction] = normalized.split(',');
+    const groupedInteger = integer !== '0' && /^[+-]?\d{1,3}$/.test(integer) && /^\d{3}$/.test(fraction);
+    normalized = groupedInteger ? `${integer}${fraction}` : `${integer}.${fraction}`;
+  } else if (commaCount > 1) {
+    if (/^[+-]?\d{1,3}(,\d{3})+$/.test(normalized)) {
+      normalized = normalized.replace(/,/g, '');
+    } else {
+      const lastComma = normalized.lastIndexOf(',');
+      const integer = normalized.slice(0, lastComma).replace(/,/g, '');
+      const fraction = normalized.slice(lastComma + 1);
+      normalized = `${integer}.${fraction}`;
+    }
+  }
+
+  const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-const readDimension = (unit, key, fallback = 0) => parseNumber(unit?.[key], fallback);
+const readDimension = (unit, key, fallback = 0) => {
+  const value = unit?.[key];
+  if (typeof value === 'string' && value.trim() === '') return 0;
+  return parseNumber(value, fallback);
+};
 const positive = (value) => Math.max(0, Number.isFinite(value) ? value : 0);
 
 function readCount(unit, key, fallback = 0) {
   const value = unit?.parts?.[key];
-  if (value === null || value === undefined || value === '') return fallback;
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === 'string' && value.trim() === '') return 0;
   return Math.max(0, Math.floor(parseNumber(value, fallback)));
 }
 
@@ -48,6 +80,7 @@ function readNumber(value) {
 
 export function buildCutList(units = []) {
   const rows = [];
+  const entries = Array.isArray(units) ? units : [];
 
   const addPart = (unit, key, part, material, width, length, perUnitCount, edgeLengthPerPiece = 0) => {
     const perUnit = Math.max(0, Math.floor(parseNumber(perUnitCount, 0)));
@@ -76,7 +109,8 @@ export function buildCutList(units = []) {
     });
   };
 
-  for (const unit of units) {
+  for (const unit of entries) {
+    if (!unit || typeof unit !== 'object' || Array.isArray(unit)) continue;
     if (unit.type === 'lower') {
       const width = readDimension(unit, 'width');
       const depth = readDimension(unit, 'depth');
@@ -127,62 +161,112 @@ export function buildCutList(units = []) {
 
 export function summarizeMaterials(cutList = []) {
   const groups = new Map();
-  for (const row of cutList) {
-    const current = groups.get(row.material) || {
-      material: row.material,
+  const rows = Array.isArray(cutList) ? cutList : [];
+  for (const row of rows) {
+    if (!row || typeof row !== 'object' || !String(row.material || '').trim()) continue;
+    const material = String(row.material);
+    const current = groups.get(material) || {
+      material,
       pieces: 0,
       areaM2: 0,
       edgeTapeCm: 0,
       lineCount: 0
     };
-    current.pieces += row.quantity;
-    current.areaM2 += row.areaM2;
-    current.edgeTapeCm += row.edgeTapeCm;
+    current.pieces += Math.max(0, parseNumber(row.quantity, 0));
+    current.areaM2 += Math.max(0, parseNumber(row.areaM2, 0));
+    current.edgeTapeCm += Math.max(0, parseNumber(row.edgeTapeCm, 0));
     current.lineCount += 1;
-    groups.set(row.material, current);
+    groups.set(material, current);
   }
   return [...groups.values()].sort((a, b) => b.areaM2 - a.areaM2);
 }
 
 export function getProjectWarnings(units = []) {
   const warnings = [];
-  for (const unit of units) {
-    const add = (message) => warnings.push({ id: `${unit.id}-${message}`, unitName: unit.name, message });
+  const entries = Array.isArray(units) ? units : [];
+  for (const [index, unit] of entries.entries()) {
+    const unitName = typeof unit?.name === 'string' && unit.name.trim() ? unit.name : 'یونیت بدون نام';
+    const unitId = typeof unit?.id === 'string' && unit.id ? unit.id : `unit-${index}`;
+    const add = (message) => warnings.push({ id: `${unitId}-${index}-${warnings.length}`, unitName, message });
+
+    if (!unit || typeof unit !== 'object' || Array.isArray(unit)) {
+      add('اطلاعات این ردیف معتبر نیست و باید دوباره وارد شود.');
+      continue;
+    }
+    if (!['lower', 'upper', 'drawer'].includes(unit.type)) {
+      add('نوع یونیت ناشناخته است و در لیست برش محاسبه نمی‌شود.');
+      continue;
+    }
+
+    if (unit.type === 'lower' || unit.type === 'upper') {
+      const rawQuantity = unit.quantity ?? 1;
+      const quantity = parseNumber(rawQuantity, Number.NaN);
+      if (!Number.isFinite(quantity) || quantity < 1 || !Number.isInteger(quantity)) {
+        add('تعداد یونیت مشابه باید عدد صحیح و دست‌کم ۱ باشد.');
+      }
+    } else {
+      const rawCount = unit.count;
+      const count = parseNumber(rawCount, Number.NaN);
+      if (!Number.isFinite(count) || count < 1 || !Number.isInteger(count)) {
+        add('تعداد کشو باید عدد صحیح و دست‌کم ۱ باشد.');
+      }
+    }
+
     if (unit.type === 'lower') {
       const width = readDimension(unit, 'width');
       const depth = readDimension(unit, 'depth');
       const height = readDimension(unit, 'height');
+      const doorCount = getDoorCount(unit);
       if (width <= WIDTH_CLEARANCE) add('عرض داخلی با کسر ۳٫۲ سانتی‌متر صفر یا منفی می‌شود.');
       if (depth <= 0 || height <= 0) add('عمق یا ارتفاع باید بزرگ‌تر از صفر باشد.');
-      if (getDoorCount(unit) === 0) add('تعداد درب خودکار برای این عرض در بازه‌ی ۱۰ تا ۱۵۰ تعریف نشده است.');
+      if (readCount(unit, 'shelf', 1) > 0 && readDimension(unit, 'shelfDepth', depth - 3) <= 0) add('عمق طبقه باید برای برش بزرگ‌تر از صفر باشد.');
+      if (readCount(unit, 'rail', 1) > 0 && readDimension(unit, 'railWidth', 7) <= 0) add('عرض قید باید برای برش بزرگ‌تر از صفر باشد.');
+      if (doorCount === 0) add('تعداد درب برای این عرض یا تنظیم دستی تعریف نشده است.');
+      if (doorCount > 0 && (readDimension(unit, 'doorHeight', 73.4) <= 0 || width / doorCount <= DOOR_GAP)) add('ابعاد درب برای برش معتبر نیست.');
     } else if (unit.type === 'upper') {
       const width = readDimension(unit, 'width');
+      const depth = readDimension(unit, 'depth');
+      const doorCount = getDoorCount(unit);
       if (width <= WIDTH_CLEARANCE) add('عرض داخلی با کسر ۳٫۲ سانتی‌متر صفر یا منفی می‌شود.');
-      if (readDimension(unit, 'depth') <= 3 || readDimension(unit, 'height') <= 0) add('عمق یا ارتفاع برای تولید قطعات کافی نیست.');
-      if (getDoorCount(unit) === 0) add('تعداد درب خودکار برای این عرض در بازه‌ی ۱۰ تا ۱۵۰ تعریف نشده است.');
-    } else if (unit.type === 'drawer') {
-      if (readDimension(unit, 'depth') <= 5) add('عمق کشو پس از کسر ۵ سانتی‌متر، قابل برش نیست.');
-      if (readDimension(unit, 'width') <= 9.1) add('عرض کشو پس از کسر ۹٫۱ سانتی‌متر، قابل برش نیست.');
-      if (readDimension(unit, 'height') / 3 <= 4) add('ارتفاع کشو برای فرمول بدنه کافی نیست.');
+      if (depth <= 3 || readDimension(unit, 'height') <= 0) add('عمق یا ارتفاع برای تولید قطعات کافی نیست.');
+      if (readCount(unit, 'bottom', 1) > 0 && readDimension(unit, 'bottomDepth', depth) <= 0) add('عمق کف باید برای برش بزرگ‌تر از صفر باشد.');
+      if (readCount(unit, 'back', 1) > 0 && readDimension(unit, 'height') <= 0.8) add('ارتفاع پشت‌بند پس از کسر ۰٫۸ سانتی‌متر قابل برش نیست.');
+      if (doorCount === 0) add('تعداد درب برای این عرض یا تنظیم دستی تعریف نشده است.');
+      if (doorCount > 0 && (readDimension(unit, 'doorHeight', 92) <= 0 || width / doorCount <= DOOR_GAP)) add('ابعاد درب برای برش معتبر نیست.');
+    } else {
+      const depth = readDimension(unit, 'depth');
+      const width = readDimension(unit, 'width');
+      const sideWidth = readDimension(unit, 'height') / 3 - 4;
+      if (depth <= 5) add('عمق کشو پس از کسر ۵ سانتی‌متر، قابل برش نیست.');
+      if (width <= 9.1) add('عرض کشو پس از کسر ۹٫۱ سانتی‌متر، قابل برش نیست.');
+      if (sideWidth <= 0) add('ارتفاع کشو برای فرمول بدنه کافی نیست.');
+      else if (sideWidth <= 2) add('ارتفاع کشو برای ساخت قطعه‌ی پشت کافی نیست.');
     }
   }
   return warnings;
 }
 
 export function getProjectStats(units = [], cutList = buildCutList(units)) {
-  const cabinetUnits = units.filter((unit) => unit.type !== 'drawer');
-  const drawerUnits = units.filter((unit) => unit.type === 'drawer');
-  const materials = summarizeMaterials(cutList);
-  const lowerCount = cabinetUnits.filter((unit) => unit.type === 'lower').length;
-  const upperCount = cabinetUnits.filter((unit) => unit.type === 'upper').length;
-  const drawerCount = drawerUnits.reduce((sum, unit) => sum + readDimension(unit, 'count', 0), 0);
-  const pieceCount = cutList.reduce((sum, item) => sum + item.quantity, 0);
-  const areaM2 = cutList.reduce((sum, item) => sum + item.areaM2, 0);
-  const edgeTapeCm = cutList.reduce((sum, item) => sum + item.edgeTapeCm, 0);
-  const thinBoard = cutList.filter((item) => item.material === BACK_BOARD).reduce((sum, item) => sum + item.quantity, 0);
+  const validUnits = Array.isArray(units) ? units.filter((unit) => unit && typeof unit === 'object') : [];
+  const validCutList = Array.isArray(cutList) ? cutList.filter((item) => item && typeof item === 'object') : [];
+  const cabinetUnits = validUnits.filter((unit) => unit.type === 'lower' || unit.type === 'upper');
+  const drawerUnits = validUnits.filter((unit) => unit.type === 'drawer');
+  const materials = summarizeMaterials(validCutList);
+  const countPhysicalUnits = (type) => cabinetUnits
+    .filter((unit) => unit.type === type)
+    .reduce((sum, unit) => sum + Math.max(0, Math.floor(readDimension(unit, 'quantity', 1))), 0);
+  const lowerCount = countPhysicalUnits('lower');
+  const upperCount = countPhysicalUnits('upper');
+  const drawerCount = drawerUnits.reduce((sum, unit) => sum + Math.max(0, Math.floor(readDimension(unit, 'count', 0))), 0);
+  const pieceCount = validCutList.reduce((sum, item) => sum + Math.max(0, parseNumber(item.quantity, 0)), 0);
+  const areaM2 = validCutList.reduce((sum, item) => sum + Math.max(0, parseNumber(item.areaM2, 0)), 0);
+  const edgeTapeCm = validCutList.reduce((sum, item) => sum + Math.max(0, parseNumber(item.edgeTapeCm, 0)), 0);
+  const thinBoard = validCutList
+    .filter((item) => item.material === BACK_BOARD)
+    .reduce((sum, item) => sum + Math.max(0, parseNumber(item.quantity, 0)), 0);
 
   return {
-    unitCount: cabinetUnits.length,
+    unitCount: lowerCount + upperCount,
     lowerCount,
     upperCount,
     drawerSetCount: drawerUnits.length,
