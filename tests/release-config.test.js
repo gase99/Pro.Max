@@ -11,9 +11,19 @@ test('desktop scripts and NSIS x64 installer configuration are present', () => {
   assert.match(packageJson.scripts.start, /npm run build.*electron/);
   assert.match(packageJson.scripts.dist, /npm run build.*electron-builder/);
   assert.match(packageJson.scripts['dist:win'], /npm run build.*--win nsis.*--publish never/);
-  assert.match(packageJson.scripts.test, /test:node.*test:import-export/);
+  // The merged runner must keep both feature suites: the Excel/engine node
+  // tests, the TypeScript cut-optimizer tests and the Excel round-trip tests.
+  assert.match(packageJson.scripts.test, /typecheck/);
+  assert.match(packageJson.scripts.test, /test:node/);
+  assert.match(packageJson.scripts.test, /test:optimizer/);
+  assert.match(packageJson.scripts.test, /test:import-export/);
   assert.match(packageJson.scripts['test:node'], /node --test/);
+  assert.match(packageJson.scripts['test:optimizer'], /vitest run tests\/optimizer\.test\.ts/);
+  assert.match(packageJson.scripts['test:optimizer'], /tests\/cutmap\.test\.tsx/);
+  // Pricing logic, storage and formatting are part of the same TypeScript suite.
+  assert.match(packageJson.scripts['test:optimizer'], /tests\/pricing\.test\.ts/);
   assert.match(packageJson.scripts['test:import-export'], /vitest run tests\/import-export\.test\.js/);
+  assert.match(packageJson.scripts.typecheck, /tsc --noEmit/);
   assert.equal(packageJson.devDependencies.vitest, '^4.1.12');
 
   assert.equal(packageJson.build.appId, 'com.promax.cabinetstudio');

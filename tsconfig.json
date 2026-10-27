@@ -1,0 +1,37 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "forceConsistentCasingInFileNames": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "skipLibCheck": true,
+    "allowJs": true,
+    "checkJs": false
+  },
+  "include": [
+    "src/lib/optimizer.ts",
+    "src/lib/pricing.ts",
+    "src/lib/pricingStorage.ts",
+    "src/components/**/*.tsx",
+    "tests/optimizer.test.ts",
+    "tests/cutmap.test.tsx",
+    "tests/app-optimizer.test.tsx",
+    "tests/app-pricing.test.tsx",
+    "tests/pricing.test.ts",
+    "vitest.config.ts"
+  ]
+}

@@ -100,6 +100,7 @@ nodeIntegration: false, nodeIntegrationInWorker: false, nodeIntegrationInSubFram
 - `src/lib/workbook.js`: تنها `import('exceljs')` پویا (chunk محلی) و ساخت `<a download>` برای Blob؛ هیچ `eval`/`Function` ندارد. ورودی فقط `.xlsx`، تا ۲۵ مگابایت، با محدودیت تعداد شیت/ردیف/ستون پذیرفته می‌شود؛ مقادیر عددی با `parseNumber` اعتبارسنجی می‌شوند.
 - `index.html`: بدون اسکریپت inline، بدون `onclick` درون‌خطی، بدون منبع CDN.
 - `src/App.jsx` و `src/lib/projectStorage.js`: داده‌ی `localStorage` با `JSON.parse` در `try/catch` خوانده می‌شود؛ نوع یونیت‌ها، فیلدهای پایه و یکتایی IDها پیش از render نرمال می‌شوند و ردیف‌های خراب/ناشناخته کنار گذاشته می‌شوند؛ هیچ HTML خام رندر نمی‌شود.
+- `src/lib/optimizer.ts` و `src/components/CutMap.tsx`: کاملاً محلی و بدون I/O؛ فقط محاسبات عددی و رندر SVG از داده‌ی همین برنامه‌اند (بدون `innerHTML`، `eval`، شبکه یا ورودی بیرونی). ورودی نامعتبر با اعتبارسنجی و پیام فارسی رد می‌شود.
 - `package.json`: هیچ اسکریپت `postinstall` مشکوک یا credential هاردکدشده وجود ندارد.
 
 ## ریسک‌های باقی‌مانده و پیشنهادهای بعدی (خارج از دامنه‌ی این پچ)

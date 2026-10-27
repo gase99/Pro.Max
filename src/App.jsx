@@ -8,6 +8,7 @@ import {
   ChevronDown,
   ChevronLeft,
   CircleHelp,
+  Coins,
   Copy,
   DoorOpen,
   Download,
@@ -29,6 +30,10 @@ import {
   Upload,
   X
 } from 'lucide-react';
+import { CostBreakdown } from './components/CostBreakdown';
+import { CutMap } from './components/CutMap';
+import { InvoiceSheet } from './components/InvoiceSheet';
+import { PriceSettingsDialog } from './components/PriceSettingsDialog';
 import { createDefaultUnit, createSampleProject } from './data/sampleProject.js';
 import {
   buildCutList,
@@ -39,6 +44,13 @@ import {
   summarizeMaterials,
   TYPE_LABELS
 } from './lib/engine.js';
+import {
+  DEFAULT_KERF_MM,
+  DEFAULT_SHEET,
+  optimizeCutListByMaterial
+} from './lib/optimizer';
+import { calculateCost, costBatchesFromReport } from './lib/pricing';
+import { loadPriceSettings, savePriceSettings } from './lib/pricingStorage';
 import { exportProjectBackup, exportWorkbook, importWorkbook } from './lib/workbook.js';
 import { formatDimension, formatNumber } from './lib/format.js';
 import { normalizeSavedProject } from './lib/projectStorage.js';
@@ -74,7 +86,7 @@ const pageMeta = {
   units: ['طراحی', 'مدیریت یونیت‌ها', 'کابینت‌های زمینی و هوایی را ویرایش یا به پروژه اضافه کنید.'],
   drawers: ['طراحی', 'محاسبه کشو', 'ابعاد مجموعه کشو و قطعات حاصل از فرمول فایل اصلی.'],
   cutlist: ['تولید', 'لیست برش', 'قطعات بر اساس یونیت، متریال و ابعاد برش.'],
-  materials: ['تولید', 'خلاصه متریال', 'مساحت قطعات و متراژ نوار لبه؛ بدون تخمین تعداد ورق خام.'],
+  materials: ['تولید', 'خلاصه متریال', 'مساحت قطعات و متراژ نوار لبه؛ تعداد ورق در لیست برش محاسبه می‌شود.'],
   roadmap: ['راهنما', 'فرمول‌ها و توسعه', 'قواعد فعلی، محدودیت‌ها و پیشنهادهای مرحله‌ی بعد.']
 };
 
@@ -128,12 +140,47 @@ function App() {
   ));
   const [mobileOpen, setMobileOpen] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [optimizerSettings, setOptimizerSettings] = useState({
+    sheetWidth: DEFAULT_SHEET.width,
+    sheetHeight: DEFAULT_SHEET.height,
+    kerf: DEFAULT_KERF_MM,
+    allowRotation: true
+  });
+  const [optimization, setOptimization] = useState(null);
+  const [priceSettings, setPriceSettings] = useState(loadPriceSettings);
+  const [priceDialog, setPriceDialog] = useState(false);
   const fileInputRef = useRef(null);
   const toastTimer = useRef(null);
 
   const cutList = useMemo(() => buildCutList(project.units || []), [project.units]);
+  const cutListSignature = useMemo(
+    () => cutList.map((row) => `${row.id}:${row.width}x${row.length}x${row.quantity}`).join('|'),
+    [cutList]
+  );
   const stats = useMemo(() => getProjectStats(project.units || [], cutList), [project.units, cutList]);
   const warnings = useMemo(() => getProjectWarnings(project.units || []), [project.units]);
+  const costBatches = useMemo(
+    () => (optimization ? costBatchesFromReport(optimization, cutList) : []),
+    [optimization, cutList]
+  );
+  const costEstimate = useMemo(() => {
+    if (!costBatches.length) return null;
+    try {
+      return calculateCost({
+        batches: costBatches,
+        settings: priceSettings,
+        unitCount: stats.unitCount
+      });
+    } catch (error) {
+      console.error('Cost estimate failed', error);
+      return null;
+    }
+  }, [costBatches, priceSettings, stats.unitCount]);
+  const invoiceIssuedOn = useMemo(() => new Date(), [costEstimate]);
+  const priceMaterials = useMemo(
+    () => [...new Set(cutList.map((row) => row.material).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fa')),
+    [cutList]
+  );
 
   useEffect(() => {
     setSaveState('saving');
@@ -273,6 +320,34 @@ function App() {
     }
   };
 
+  const openPriceSettings = () => setPriceDialog(true);
+
+  const savePrices = (next) => {
+    setPriceSettings(next);
+    setPriceDialog(false);
+    const persisted = savePriceSettings(next);
+    notify(
+      persisted ? 'قیمت‌های کارگاه ذخیره شد.' : 'قیمت‌ها اعمال شد، ولی ذخیره‌ی محلی ممکن نبود.',
+      persisted ? 'success' : 'warning'
+    );
+  };
+
+  const printInvoice = () => {
+    const body = document.body;
+    const cleanup = () => body.classList.remove('printing-invoice');
+    body.classList.add('printing-invoice');
+    window.addEventListener('afterprint', cleanup, { once: true });
+    try {
+      window.print();
+    } catch (error) {
+      console.error('Invoice print failed', error);
+      notify('چاپ پیش‌فاکتور انجام نشد.', 'error');
+      cleanup();
+    }
+    // Some embedded browsers never fire `afterprint`; never leave the page in print mode.
+    window.setTimeout(cleanup, 60000);
+  };
+
   const currentMeta = pageMeta[activePage] || pageMeta.overview;
 
   return (
@@ -282,6 +357,7 @@ function App() {
         onNavigate={navigate}
         onNewProject={startNewProject}
         onProjectSettings={() => setProjectDialog(true)}
+        onOpenPrices={openPriceSettings}
         project={project}
         isOpen={mobileOpen}
         onClose={() => setMobileOpen(false)}
@@ -304,6 +380,10 @@ function App() {
               <span className="save-dot" />
               <span>{saveState === 'saving' ? 'در حال ذخیره' : saveState === 'error' ? 'ذخیره نشد' : 'ذخیره خودکار'}</span>
             </div>
+            <button className="button button-quiet hide-small" onClick={openPriceSettings}>
+              <Coins size={16} />
+              <span>تنظیمات قیمت</span>
+            </button>
             <button className="button button-quiet hide-small" onClick={handleImportClick} disabled={importing}>
               {importing ? <span className="spinner" /> : <Upload size={16} />}
               <span>{importing ? 'در حال خواندن…' : 'ورود از Excel'}</span>
@@ -386,6 +466,7 @@ function App() {
           {activePage === 'cutlist' && (
             <CutListPage
               cutList={cutList}
+              cutListSignature={cutListSignature}
               filter={cutFilter}
               setFilter={setCutFilter}
               search={cutSearch}
@@ -393,6 +474,13 @@ function App() {
               page={cutPage}
               setPage={setCutPage}
               onExport={handleExport}
+              settings={optimizerSettings}
+              onSettingsChange={setOptimizerSettings}
+              optimization={optimization}
+              onOptimizationChange={setOptimization}
+              costEstimate={costEstimate}
+              onEditPrices={openPriceSettings}
+              onPrintInvoice={printInvoice}
             />
           )}
           {activePage === 'materials' && (
@@ -421,13 +509,32 @@ function App() {
           }}
         />
       )}
+      {priceDialog && (
+        <PriceSettingsDialog
+          settings={priceSettings}
+          materials={priceMaterials}
+          batches={costBatches}
+          unitCount={stats.unitCount || null}
+          onClose={() => setPriceDialog(false)}
+          onSave={savePrices}
+        />
+      )}
+      {costEstimate && activePage === 'cutlist' && (
+        <InvoiceSheet
+          estimate={costEstimate}
+          project={project}
+          cutList={cutList}
+          report={optimization}
+          issuedOn={invoiceIssuedOn}
+        />
+      )}
       {importing && <div className="import-overlay" role="status" aria-live="polite"><div><span className="spinner" /><span>در حال خواندن فایل و جایگزینی پروژه…</span></div></div>}
       {toast && <div className={`toast toast-${toast.tone}`} role="status">{toast.tone === 'error' || toast.tone === 'warning' ? <AlertTriangle size={17} /> : <CheckCircle2 size={17} />}{toast.message}</div>}
     </div>
   );
 }
 
-function Sidebar({ activePage, onNavigate, onNewProject, onProjectSettings, project, isOpen, onClose }) {
+function Sidebar({ activePage, onNavigate, onNewProject, onProjectSettings, onOpenPrices, project, isOpen, onClose }) {
   const lowerCount = project.units.filter((unit) => unit.type === 'lower').length;
   const upperCount = project.units.filter((unit) => unit.type === 'upper').length;
   const drawerCount = project.units.filter((unit) => unit.type === 'drawer').length;
@@ -472,6 +579,7 @@ function Sidebar({ activePage, onNavigate, onNewProject, onProjectSettings, proj
 
         <div className="sidebar-bottom">
           <div className="offline-note"><span className="offline-dot" /><span>ذخیره‌شده روی همین دستگاه</span></div>
+          <button className="price-settings-button" onClick={onOpenPrices}><Coins size={16} /><span>تنظیمات قیمت</span></button>
           <button className="new-project-button" onClick={onNewProject}><Plus size={17} /><span>پروژه‌ی جدید</span></button>
           <div className="sidebar-user">
             <div className="user-avatar">PM</div>
@@ -571,7 +679,7 @@ function OverviewPage({ project, stats, cutList, warnings, onNavigate, onAdd, on
                   </div>
                 );
               })}
-              <div className="area-warning"><AlertTriangle size={15} /><span>تعداد ورق خام از روی مساحت تخمین زده نشده؛ ابعاد ورق در فایل منبع مشخص نیست.</span></div>
+              <div className="area-warning"><Scissors size={15} /><span>تعداد ورق و نقشه‌ی چیدمان در «لیست برش ← محاسبه‌ی بهینه‌سازی برش» با ابعاد ورق و ضخامت تیغ شما محاسبه می‌شود.</span></div>
             </div>
           ) : <div className="empty-inline">بعد از افزودن یونیت، خلاصه‌ی متریال اینجا نمایش داده می‌شود.</div>}
         </div>
@@ -600,7 +708,7 @@ function OverviewPage({ project, stats, cutList, warnings, onNavigate, onAdd, on
               <>
                 <div className="quality-note"><CheckCircle2 size={16} /><div><strong>ابعاد قابل محاسبه</strong><span>فرمول‌ها بدون مقدار منفی تولید شده‌اند.</span></div></div>
                 <div className="quality-note"><Ruler size={16} /><div><strong>واحد اندازه‌گیری</strong><span>فایل واحد را صریح مشخص نکرده؛ این نسخه سانتی‌متر فرض می‌کند.</span></div></div>
-                <div className="quality-note"><Scissors size={16} /><div><strong>برش بهینه</strong><span>تیغ اره، رگه‌ی ورق و پرت در این نسخه لحاظ نمی‌شوند.</span></div></div>
+                <div className="quality-note"><Scissors size={16} /><div><strong>برش بهینه</strong><span>چیدمان گیوتینی با احتساب تیغ اره؛ جهت رگه را پیش از برش کنترل کنید.</span></div></div>
               </>
             )}
           </div>
@@ -784,7 +892,25 @@ function UnitActions({ unit, onEdit, onDuplicate, onDelete }) {
   );
 }
 
-function CutListPage({ cutList, filter, setFilter, search, setSearch, page, setPage, onExport }) {
+function CutListPage({
+  cutList,
+  cutListSignature,
+  filter,
+  setFilter,
+  search,
+  setSearch,
+  page,
+  setPage,
+  onExport,
+  settings,
+  onSettingsChange,
+  optimization,
+  onOptimizationChange,
+  costEstimate,
+  onEditPrices,
+  onPrintInvoice
+}) {
+  const [optimizerError, setOptimizerError] = useState('');
   const pageSize = 14;
   const filtered = cutList.filter((row) => {
     const matchesType = filter === 'all' || row.type === filter;
@@ -801,6 +927,54 @@ function CutListPage({ cutList, filter, setFilter, search, setSearch, page, setP
   const totalPieces = filtered.reduce((sum, row) => sum + row.quantity, 0);
   const totalEdge = filtered.reduce((sum, row) => sum + row.edgeTapeCm, 0) / 100;
 
+  const resultsRef = useRef(null);
+  const isStale = Boolean(optimization && optimization.signature !== cutListSignature);
+
+  const updateSetting = (key, value) => {
+    onSettingsChange((current) => ({ ...current, [key]: value }));
+  };
+
+  const runOptimization = () => {
+    const width = parseNumber(settings.sheetWidth, 0);
+    const height = parseNumber(settings.sheetHeight, 0);
+    const blade = settings.kerf === '' ? DEFAULT_KERF_MM : parseNumber(settings.kerf, -1);
+
+    if (!(width > 0) || !(height > 0)) {
+      setOptimizerError('عرض و طول ورق باید عددی بزرگ‌تر از صفر باشند.');
+      return;
+    }
+    if (!(blade >= 0)) {
+      setOptimizerError('ضخامت تیغ اره باید عددی بزرگ‌تر یا مساوی صفر باشد.');
+      return;
+    }
+    if (!cutList.length) {
+      setOptimizerError('قطعه‌ای برای بهینه‌سازی وجود ندارد؛ ابتدا یونیت اضافه کنید یا فایل Excel را وارد کنید.');
+      return;
+    }
+
+    try {
+      onOptimizationChange({
+        ...optimizeCutListByMaterial(cutList, {
+          sheet: { width, height },
+          kerf: blade,
+          allowRotation: settings.allowRotation
+        }),
+        signature: cutListSignature,
+        computedAt: new Date()
+      });
+      setOptimizerError('');
+      window.requestAnimationFrame(() => {
+        const target = resultsRef.current;
+        if (target && typeof target.scrollIntoView === 'function') {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    } catch (error) {
+      console.error('Cut optimization failed', error);
+      setOptimizerError(error?.message || 'محاسبه‌ی بهینه‌سازی برش انجام نشد.');
+    }
+  };
+
   return (
     <div className="content-wrap">
       <PageHeader eyebrow="تولید" title="لیست برش" description="ابعاد برش با واحد سانتی‌متر؛ تعداد هر ردیف پس از اعمال تعداد یونیت محاسبه شده است.">
@@ -812,6 +986,100 @@ function CutListPage({ cutList, filter, setFilter, search, setSearch, page, setP
         <div><span>مجموع قطعات</span><strong>{formatNumber(totalPieces, 0)}</strong></div>
         <div><span>نوار لبه‌ی محاسبه‌شده</span><strong>{formatNumber(totalEdge, 2)} <small>m</small></strong></div>
       </div>
+
+      <section className="card optimizer-panel" aria-labelledby="optimizer-title">
+        <div className="optimizer-panel-head">
+          <div className="optimizer-panel-icon"><Scissors size={19} /></div>
+          <div>
+            <span className="card-overline">چیدمان ورق</span>
+            <h3 id="optimizer-title">محاسبه‌ی بهینه‌سازی برش</h3>
+            <p>قطعات هر متریال جداگانه روی ورق چیده می‌شوند؛ ضخامت تیغ اره بین قطعات لحاظ می‌شود.</p>
+          </div>
+        </div>
+        <div className="optimizer-controls">
+          <NumericField label="عرض ورق" value={settings.sheetWidth} onChange={(value) => updateSetting('sheetWidth', value)} unit="mm" compact />
+          <NumericField label="طول ورق" value={settings.sheetHeight} onChange={(value) => updateSetting('sheetHeight', value)} unit="mm" compact />
+          <NumericField label="ضخامت تیغ" value={settings.kerf} onChange={(value) => updateSetting('kerf', value)} unit="mm" compact />
+          <label className="optimizer-toggle toggle-row">
+            <input type="checkbox" checked={settings.allowRotation} onChange={(event) => updateSetting('allowRotation', event.target.checked)} />
+            <span className="toggle-track" />
+            <span>چرخش ۹۰ درجه‌ی قطعات</span>
+          </label>
+          <button type="button" className="button button-primary optimizer-submit" onClick={runOptimization}>
+            <Scissors size={16} />
+            محاسبه‌ی بهینه‌سازی برش
+          </button>
+        </div>
+        <div className="optimizer-note">
+          <CircleHelp size={15} />
+          <span>همه‌ی ردیف‌های لیست برش (بدون توجه به فیلتر جدول) محاسبه می‌شوند. جهت رگه، پرت طبیعی ورق و لبه‌ی خام را قبل از برش کنترل کنید.</span>
+        </div>
+        {optimizerError && <div className="form-error" role="alert"><AlertTriangle size={15} />{optimizerError}</div>}
+      </section>
+
+      {optimization && (
+        <div
+          className="cut-optimizer-results"
+          id="cut-optimization-results"
+          aria-live="polite"
+          ref={resultsRef}
+        >
+          {isStale && (
+            <div className="inline-info optimizer-stale-info" role="status">
+              <AlertTriangle size={16} />
+              <span>لیست برش بعد از این محاسبه تغییر کرده است؛ برای نتیجه‌ی به‌روز دوباره «محاسبه‌ی بهینه‌سازی برش» را بزنید.</span>
+            </div>
+          )}
+          <section className="card optimizer-summary">
+            <div className="optimizer-summary-main">
+              <div className="optimizer-summary-icon"><Layers size={20} /></div>
+              <div>
+                <span className="card-overline">نتیجه‌ی محاسبه</span>
+                <h3>{formatNumber(optimization.totals.sheets, 0)} ورق برای {formatNumber(optimization.totals.placed, 0)} قطعه</h3>
+                <p>
+                  ورق {formatNumber(optimization.settings.sheet.width, 0)} × {formatNumber(optimization.settings.sheet.height, 0)} میلی‌متر
+                  {' · '}تیغ {formatNumber(optimization.settings.kerf, 1)} میلی‌متر
+                  {' · '}{optimization.settings.allowRotation ? 'چرخش مجاز' : 'بدون چرخش'}
+                  {' · '}{formatNumber(optimization.groups.length, 0)} متریال
+                </p>
+              </div>
+            </div>
+            <div className="optimizer-summary-metrics">
+              <div><span>مجموع ورق</span><strong>{formatNumber(optimization.totals.sheets, 0)}</strong></div>
+              <div><span>پرت کل</span><strong>{formatNumber(optimization.totals.wastePercentage, 1)}<small>٪</small></strong></div>
+              <div><span>مساحت پرت</span><strong>{formatNumber(optimization.totals.wasteArea / 1000000, 2)}<small>m²</small></strong></div>
+              <div><span>قطعات چیده‌شده</span><strong>{formatNumber(optimization.totals.placed, 0)}<small>از {formatNumber(optimization.totals.requested, 0)}</small></strong></div>
+            </div>
+          </section>
+
+          {optimization.totals.rejected > 0 && (
+            <div className="inline-info optimizer-rejected-info">
+              <AlertTriangle size={16} />
+              <span>{formatNumber(optimization.totals.rejected, 0)} قطعه به‌دلیل ابعاد بزرگ‌تر از ورق یا داده‌ی نامعتبر چیده نشد؛ جزئیات زیر هر متریال آمده است.</span>
+            </div>
+          )}
+
+          <div className="optimizer-materials">
+            {optimization.groups.map(({ material, result }) => (
+              <CutMap
+                key={material}
+                result={result}
+                title={material}
+                subtitle={`${formatNumber(result.totalSheetsUsed, 0)} ورق · ${formatNumber(result.placedPieceCount, 0)} قطعه · ${formatNumber(result.wastePercentage, 1)}٪ پرت`}
+              />
+            ))}
+          </div>
+
+          {costEstimate && (
+            <CostBreakdown
+              estimate={costEstimate}
+              stale={isStale}
+              onEditPrices={onEditPrices}
+              onPrint={onPrintInvoice}
+            />
+          )}
+        </div>
+      )}
 
       <div className="card table-card cutlist-table-card">
         <div className="cutlist-toolbar">
@@ -844,7 +1112,7 @@ function CutListPage({ cutList, filter, setFilter, search, setSearch, page, setP
         ) : <EmptyState title="قطعه‌ای پیدا نشد" detail="فیلتر یا عبارت جستجو را تغییر دهید." />}
         <div className="table-footer"><span>نمایش {formatNumber(filtered.length ? safePage * pageSize + 1 : 0, 0)} تا {formatNumber(Math.min((safePage + 1) * pageSize, filtered.length), 0)} از {formatNumber(filtered.length, 0)} ردیف</span><div className="pagination"><button disabled={safePage <= 0} onClick={() => setPage(Math.max(0, safePage - 1))} aria-label="صفحه قبلی"><ChevronLeft size={16} /></button><span>{formatNumber(safePage + 1, 0)} / {formatNumber(pageCount, 0)}</span><button disabled={safePage + 1 >= pageCount} onClick={() => setPage(Math.min(pageCount - 1, safePage + 1))} aria-label="صفحه بعد"><ChevronLeft size={16} className="flip-icon" /></button></div></div>
       </div>
-      <div className="inline-info"><AlertTriangle size={16} /><span>لیست برش از قواعد و مقادیر فایل اکسل بازسازی شده است. ضخامت تیغ اره، جهت رگه، پرت ورق خام و بهینه‌سازی چیدمان در نسخه‌ی فعلی لحاظ نمی‌شود.</span></div>
+      <div className="inline-info"><CircleHelp size={16} /><span>لیست برش از قواعد و مقادیر فایل اکسل بازسازی شده است. چیدمان ورق با «بهینه‌سازی برش» بالا محاسبه می‌شود؛ جهت رگه و پرت طبیعی ورق را قبل از برش کنترل کنید.</span></div>
     </div>
   );
 }
@@ -855,12 +1123,12 @@ function MaterialsPage({ project, cutList, stats, onBackup }) {
   const mainEdge = cutList.reduce((sum, item) => sum + item.edgeTapeCm, 0) / 100;
   return (
     <div className="content-wrap">
-      <PageHeader eyebrow="تولید" title="مصالح و نوار لبه" description="خلاصه‌ی مساحت قطعات؛ برای سفارش ورق، ابعاد ورق خام باید در تنظیمات پروژه تعریف شود.">
+      <PageHeader eyebrow="تولید" title="مصالح و نوار لبه" description="خلاصه‌ی مساحت قطعات؛ برای تعداد ورق و نقشه‌ی برش از صفحه‌ی لیست برش استفاده کنید.">
         <button className="button button-outline" onClick={onBackup}><Download size={16} /> پشتیبان پروژه</button>
       </PageHeader>
 
       <section className="material-summary-hero">
-        <div className="material-summary-intro"><div className="summary-badge"><Package size={16} /> برآورد ابعادی</div><h2>مواد اولیه‌ی پروژه</h2><p>جمع مساحت از طول × عرض هر قطعه محاسبه می‌شود؛ این مقدار جایگزین بهینه‌سازی واقعی ورق نیست.</p></div>
+        <div className="material-summary-intro"><div className="summary-badge"><Package size={16} /> برآورد ابعادی</div><h2>مواد اولیه‌ی پروژه</h2><p>جمع مساحت از طول × عرض هر قطعه محاسبه می‌شود؛ برای تعداد ورق و درصد پرت، چیدمان را در لیست برش محاسبه کنید.</p></div>
         <div className="material-kpi"><span>مساحت کل قطعات</span><strong>{formatNumber(stats.areaM2, 2)} <small>m²</small></strong><span>بدون افزودن پرت</span></div>
         <div className="material-kpi"><span>نوار لبه</span><strong>{formatNumber(mainEdge, 2)} <small>m</small></strong><span>طبق پرچم‌های فایل اصلی</span></div>
       </section>
@@ -881,8 +1149,8 @@ function MaterialsPage({ project, cutList, stats, onBackup }) {
 
         <div className="material-side-column">
           <div className="card material-note-card">
-            <div className="note-card-icon"><Ruler size={19} /></div><h3>برای سفارش ورق چه چیزی کم است؟</h3><p>فایل منبع فقط اندازه‌ی قطعات را دارد و ابعاد ورق خام، ضخامت تیغ و جهت رگه را مشخص نمی‌کند.</p>
-            <div className="missing-settings"><span><i /> ابعاد ورق خام</span><span><i /> ضخامت تیغ اره</span><span><i /> حاشیه‌ی پرت</span></div>
+            <div className="note-card-icon"><Ruler size={19} /></div><h3>ورودی‌های لازم برای چیدمان ورق</h3><p>ابعاد ورق و ضخامت تیغ را در «لیست برش ← محاسبه‌ی بهینه‌سازی برش» وارد کنید؛ این مقادیر فعلاً در پروژه ذخیره نمی‌شوند.</p>
+            <div className="missing-settings"><span><i /> ابعاد ورق خام</span><span><i /> ضخامت تیغ اره</span><span><i /> جهت رگه (دستی)</span></div>
             <button className="text-link" onClick={() => window.print()}>چاپ خلاصه <ChevronLeft size={15} /></button>
           </div>
           <div className="card material-source-card">
@@ -890,15 +1158,15 @@ function MaterialsPage({ project, cutList, stats, onBackup }) {
           </div>
         </div>
       </section>
-      <div className="inline-info"><CircleHelp size={16} /><span>در نسخه‌ی بعد می‌توان تعداد ورق و چیدمان بهینه را با تعریف ابعاد ورق خام محاسبه کرد.</span></div>
+      <div className="inline-info"><CircleHelp size={16} /><span>مساحت بالا فقط سطح قطعات است؛ پرت و تیغ اره در آن نیامده. تعداد ورق واقعی را از خروجی بهینه‌سازی برش بردارید.</span></div>
     </div>
   );
 }
 
 function RoadmapPage({ project, warnings }) {
   const suggestions = [
-    { code: '01', title: 'بهینه‌سازی چیدمان برش', priority: 'اولویت بالا', description: 'تعریف اندازه‌ی ورق خام، ضخامت تیغ، جهت رگه و فاصله‌ی برش؛ سپس کمینه‌کردن پرت و ساخت نقشه‌ی برش.', icon: Scissors, tone: 'teal' },
-    { code: '02', title: 'قیمت‌گذاری و پیش‌فاکتور', priority: 'اولویت بالا', description: 'بانک قیمت MDF، نوار لبه و یراق‌آلات، محاسبه‌ی اجرت، مالیات و خروجی پیش‌فاکتور مشتری.', icon: Package, tone: 'orange' },
+    { code: '01', title: 'بهینه‌سازی چیدمان برش', priority: 'پیاده‌سازی شد', description: 'چیدمان گیوتینی (Best Short Side Fit) با ابعاد ورق، ضخامت تیغ، چرخش قطعات، درصد پرت و نقشه‌ی SVG قابل چاپ.', icon: Scissors, tone: 'teal' },
+    { code: '02', title: 'قیمت‌گذاری و پیش‌فاکتور', priority: 'پیاده‌سازی شد', description: 'بانک قیمت ورق MDF (عمومی و اختصاصی هر متریال)، نوار لبه، دستمزد و یراق‌آلات؛ ذخیره‌ی محلی و پیش‌فاکتور چاپی همراه لیست برش.', icon: Package, tone: 'teal' },
     { code: '03', title: 'طراحی تصویری آشپزخانه', priority: 'مرحله‌ی بعد', description: 'نقشه‌ی دوبعدی دیوارها، پنجره و لوازم؛ جابه‌جایی یونیت‌ها با کشیدن و رهاکردن و پیش‌نمایش سه‌بعدی.', icon: PanelTop, tone: 'blue' },
     { code: '04', title: 'خروجی CNC و کارگاه', priority: 'مرحله‌ی بعد', description: 'فایل DXF/CSV، برچسب قطعه با کد یونیت، بارکد، سوراخ‌کاری و خروجی متناسب با دستگاه و اپراتور.', icon: Boxes, tone: 'violet' },
     { code: '05', title: 'مدیریت مشتری و سفارش', priority: 'پیشنهادی', description: 'پرونده‌ی مشتری، نسخه‌بندی طرح، وضعیت اندازه‌گیری/ساخت/نصب، یادداشت‌ها و آرشیو جست‌وجوپذیر.', icon: FileSpreadsheet, tone: 'green' },
@@ -942,7 +1210,7 @@ function RoadmapPage({ project, warnings }) {
         ))}
       </section>
 
-      <div className="limits-card"><div className="limits-icon"><AlertTriangle size={18} /></div><div><strong>محدودیت‌های نسخه‌ی فعلی</strong><p>محاسبات با قواعد دیده‌شده در شیت‌های اکسل انجام می‌شود. قیمت و تعداد ورق خام، پرت برش، جهت رگه، یراق‌آلات، کف کشو، CNC و نقشه‌ی نصب هنوز محاسبه نمی‌شوند. {warnings.length > 0 && `${formatNumber(warnings.length, 0)} هشدار ابعادی هم برای بررسی وجود دارد.`}</p></div></div>
+      <div className="limits-card"><div className="limits-icon"><AlertTriangle size={18} /></div><div><strong>محدودیت‌های نسخه‌ی فعلی</strong><p>محاسبات با قواعد دیده‌شده در شیت‌های اکسل انجام می‌شود. جهت رگه، رزرو لبه‌ی خام، کف کشو، مالیات و نقشه‌ی نصب هنوز محاسبه نمی‌شوند؛ قیمت و یراق‌آلات فقط بر اساس مقادیر دستی همین برنامه برآورد می‌شوند. {warnings.length > 0 && `${formatNumber(warnings.length, 0)} هشدار ابعادی هم برای بررسی وجود دارد.`}</p></div></div>
     </div>
   );
 }
